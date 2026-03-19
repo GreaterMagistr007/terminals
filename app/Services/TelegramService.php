@@ -48,13 +48,16 @@ class TelegramService
     }
 
     /** Отправка сообщения пользователю через бота */
-    public function sendMessage(string $chatId, string $text, ?array $replyMarkup = null): bool
+    public function sendMessage(string $chatId, string $text, ?array $replyMarkup = null, ?string $parseMode = 'HTML'): bool
     {
         $payload = [
             'chat_id' => $chatId,
             'text' => $text,
-            'parse_mode' => 'HTML',
         ];
+
+        if ($parseMode !== null) {
+            $payload['parse_mode'] = $parseMode;
+        }
 
         if ($replyMarkup !== null) {
             $payload['reply_markup'] = json_encode($replyMarkup);

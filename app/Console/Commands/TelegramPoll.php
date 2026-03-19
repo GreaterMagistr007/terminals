@@ -95,15 +95,26 @@ class TelegramPoll extends Command
         $appUrl = config('app.url');
         $loginUrl = "{$appUrl}/auth/telegram/{$authToken->token}";
 
-        $telegramService->sendMessage(
-            $chatId,
-            "Нажмите кнопку для входа в приложение:",
-            [
-                'inline_keyboard' => [
-                    [['text' => 'Войти в Terminals', 'url' => $loginUrl]],
-                ],
-            ]
-        );
+        // Inline-кнопки работают только с HTTPS-ссылками.
+        // Для dev (localhost) отправляем ссылку текстом.
+        if (str_starts_with($appUrl, 'https://')) {
+            $telegramService->sendMessage(
+                $chatId,
+                "Нажмите кнопку для входа в приложение:",
+                [
+                    'inline_keyboard' => [
+                        [['text' => 'Войти в Terminals', 'url' => $loginUrl]],
+                    ],
+                ]
+            );
+        } else {
+            $telegramService->sendMessage(
+                $chatId,
+                "Ссылка для входа (действует 15 минут):\n{$loginUrl}",
+                null,
+                null
+            );
+        }
 
         $this->info("Auth link sent to {$user->name} (telegram: {$telegramId})");
     }
@@ -124,15 +135,24 @@ class TelegramPoll extends Command
         $appUrl = config('app.url');
         $loginUrl = "{$appUrl}/auth/telegram/{$botAuthToken->token}";
 
-        $telegramService->sendMessage(
-            $chatId,
-            "Ваш Telegram привязан! Нажмите кнопку для входа:",
-            [
-                'inline_keyboard' => [
-                    [['text' => 'Войти в Terminals', 'url' => $loginUrl]],
-                ],
-            ]
-        );
+        if (str_starts_with($appUrl, 'https://')) {
+            $telegramService->sendMessage(
+                $chatId,
+                "Ваш Telegram привязан! Нажмите кнопку для входа:",
+                [
+                    'inline_keyboard' => [
+                        [['text' => 'Войти в Terminals', 'url' => $loginUrl]],
+                    ],
+                ]
+            );
+        } else {
+            $telegramService->sendMessage(
+                $chatId,
+                "Ваш Telegram привязан! Ссылка для входа:\n{$loginUrl}",
+                null,
+                null
+            );
+        }
 
         $this->info("Invite activated for telegram: {$telegramId}");
     }
