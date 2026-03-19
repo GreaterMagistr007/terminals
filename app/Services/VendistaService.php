@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\UserRole;
 use App\Models\User;
+use App\Models\VendistaTerminal;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -12,10 +13,13 @@ use Illuminate\Support\Facades\Log;
 class VendistaService
 {
     private const CACHE_TOKEN_KEY = 'vendista_api_token';
+    private const CACHE_TERMINALS_SYNC_KEY = 'vendista_terminals_last_sync';
+    private const TERMINALS_SYNC_INTERVAL_HOURS = 24;
 
     private string $baseUrl;
     private string $login;
     private string $password;
+    private bool $isSyncing = false;
 
     public function __construct(private TelegramService $telegramService)
     {
@@ -68,6 +72,11 @@ class VendistaService
      */
     public function request(string $method, string $path, array $params = []): ?array
     {
+        // Автосинхронизация терминалов раз в сутки при любом запросе
+        if (!$this->isSyncing) {
+            $this->autoSyncTerminalsIfNeeded();
+        }
+
         $token = Cache::get(self::CACHE_TOKEN_KEY);
 
         // Нет токена — авторизуемся
@@ -209,6 +218,128 @@ class VendistaService
         }
 
         return $this->get('/reports/common', $params);
+    }
+
+    /**
+     * Получение всех терминалов из Vendista API (с пагинацией).
+     * @return array|null Массив терминалов или null при ошибке
+     */
+    public function fetchAllTerminals(): ?array
+    {
+        $allItems = [];
+        $page = 1;
+        $perPage = 100;
+
+        do {
+            $data = $this->get('/terminals', [
+                'PageNumber' => $page,
+                'ItemsOnPage' => $perPage,
+            ]);
+
+            if ($data === null || !($data['success'] ?? false)) {
+                Log::error('Vendista API: ошибка получения терминалов', ['page' => $page]);
+                return null;
+            }
+
+            $items = $data['items'] ?? [];
+            $allItems = array_merge($allItems, $items);
+            $totalCount = $data['items_count'] ?? 0;
+            $page++;
+        } while (count($allItems) < $totalCount && count($items) > 0);
+
+        return $allItems;
+    }
+
+    /**
+     * Синхронизация терминалов из Vendista API в локальную БД.
+     * @return array{added: int, updated: int, deleted: int}|null Отчёт или null при ошибке
+     */
+    public function syncTerminals(): ?array
+    {
+        $this->isSyncing = true;
+
+        try {
+            $remoteTerminals = $this->fetchAllTerminals();
+        } finally {
+            $this->isSyncing = false;
+        }
+
+        if ($remoteTerminals === null) {
+            return null;
+        }
+
+        $remoteById = collect($remoteTerminals)->keyBy('id');
+        $localTerminals = VendistaTerminal::all()->keyBy('vendista_id');
+
+        $added = 0;
+        $updated = 0;
+
+        foreach ($remoteById as $vendistaId => $remote) {
+            $attributes = [
+                'comment' => $remote['comment'] ?? null,
+                'vendista_machine_id' => $remote['machine_id'] ?? null,
+                'tid' => $remote['tid'] ?? null,
+                'serial_number' => $remote['serial_number'] ?? null,
+                'latitude' => $remote['latitude'] ?? null,
+                'longitude' => $remote['longitude'] ?? null,
+                'last_online_at' => $remote['last_online_time'] ?? null,
+                'state' => $remote['state'] ?? 0,
+            ];
+
+            $local = $localTerminals->get($vendistaId);
+
+            if ($local === null) {
+                VendistaTerminal::create(['vendista_id' => $vendistaId, ...$attributes]);
+                $added++;
+            } else {
+                // Проверяем, изменились ли данные
+                $changed = false;
+                foreach ($attributes as $key => $value) {
+                    if ($key === 'last_online_at') {
+                        $localValue = $local->last_online_at?->toIso8601String();
+                        $remoteValue = $value;
+                        if ($localValue !== $remoteValue) {
+                            $changed = true;
+                            break;
+                        }
+                    } elseif ((string) $local->$key !== (string) $value) {
+                        $changed = true;
+                        break;
+                    }
+                }
+
+                if ($changed) {
+                    $local->update($attributes);
+                    $updated++;
+                }
+            }
+        }
+
+        // Удаление терминалов, которых больше нет в Vendista
+        $remoteIds = $remoteById->keys()->toArray();
+        $deleted = VendistaTerminal::whereNotIn('vendista_id', $remoteIds)->delete();
+
+        Cache::put(self::CACHE_TERMINALS_SYNC_KEY, now());
+
+        Log::info('Vendista: синхронизация терминалов', [
+            'added' => $added,
+            'updated' => $updated,
+            'deleted' => $deleted,
+        ]);
+
+        return compact('added', 'updated', 'deleted');
+    }
+
+    /** Автосинхронизация терминалов, если прошло больше суток */
+    private function autoSyncTerminalsIfNeeded(): void
+    {
+        $lastSync = Cache::get(self::CACHE_TERMINALS_SYNC_KEY);
+
+        if ($lastSync !== null && now()->diffInHours($lastSync) < self::TERMINALS_SYNC_INTERVAL_HOURS) {
+            return;
+        }
+
+        $this->syncTerminals();
     }
 
     /** Выполнение HTTP-запроса с токеном */

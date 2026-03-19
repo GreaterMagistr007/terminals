@@ -31,6 +31,12 @@ const routes = [
                 component: () => import('@/pages/admin/Users.vue'),
                 meta: { admin: true },
             },
+            {
+                path: 'admin/terminals',
+                name: 'admin-terminals',
+                component: () => import('@/pages/admin/Terminals.vue'),
+                meta: { admin: true },
+            },
         ],
     },
 ];
