@@ -40,4 +40,10 @@ return [
         'bot_username' => env('TELEGRAM_BOT_USERNAME'),
     ],
 
+    'vendista' => [
+        'api_login' => env('VENDISTA_API_LOGIN'),
+        'api_password' => env('VENDISTA_API_PASSWORD'),
+        'base_url' => env('VENDISTA_API_URL', 'https://api.vendista.ru:99'),
+    ],
+
 ];
