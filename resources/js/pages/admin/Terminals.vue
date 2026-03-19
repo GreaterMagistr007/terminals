@@ -23,11 +23,6 @@
                         <p class="font-medium text-gray-900 dark:text-white">
                             {{ terminal.comment || 'Без описания' }}
                         </p>
-                        <p class="text-sm text-gray-500 dark:text-gray-400">
-                            <span v-if="terminal.tid">TID: {{ terminal.tid }}</span>
-                            <span v-if="terminal.serial_number" class="ml-2">S/N: {{ terminal.serial_number }}</span>
-                            <span class="ml-2">ID: {{ terminal.vendista_id }}</span>
-                        </p>
                     </div>
                     <div class="flex items-center gap-2">
                         <span
