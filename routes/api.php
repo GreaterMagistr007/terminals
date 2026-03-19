@@ -25,6 +25,9 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
     Route::get('/auth/me', [AuthController::class, 'me']);
     Route::post('/auth/logout', [AuthController::class, 'logout']);
 
+    // Терминалы (для всех авторизованных)
+    Route::get('/terminals', [VendistaTerminalController::class, 'index']);
+
     // Админские маршруты
     Route::middleware('admin')->prefix('admin')->group(function () {
         Route::get('/users', [UserController::class, 'index']);

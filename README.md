@@ -25,3 +25,5 @@ composer test     # запуск тестов
 - **[docs/INDEX.md](./docs/INDEX.md)** — оглавление документации
 - **[docs/PROJECT.md](./docs/PROJECT.md)** — требования к проекту, модель данных, решения по архитектуре
 - **[docs/ROADMAP.md](./docs/ROADMAP.md)** — план реализации по этапам, текущий статус
+- **[docs/VENDISTA_API.md](./docs/VENDISTA_API.md)** — конспект Vendista API (244 эндпоинта)
+- **[docs/TELEMETRON_REFERENCE.md](./docs/TELEMETRON_REFERENCE.md)** — справочник функционала Telemetron (референс)

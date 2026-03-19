@@ -4,6 +4,96 @@ import AppLayout from '@/layouts/AppLayout.vue';
 
 const routes = [
     {
+        path: '/demo/a',
+        name: 'demo-a',
+        component: () => import('@/pages/demo/VariantA.vue'),
+    },
+    {
+        path: '/demo/b',
+        name: 'demo-b',
+        component: () => import('@/pages/demo/VariantB.vue'),
+    },
+    {
+        path: '/demo/c',
+        name: 'demo-c',
+        component: () => import('@/pages/demo/VariantC.vue'),
+    },
+    {
+        path: '/demo/d',
+        name: 'demo-d',
+        component: () => import('@/pages/demo/VariantD.vue'),
+    },
+    {
+        path: '/demo/e',
+        name: 'demo-e',
+        component: () => import('@/pages/demo/VariantE.vue'),
+    },
+    {
+        path: '/demo/f',
+        name: 'demo-f',
+        component: () => import('@/pages/demo/VariantF.vue'),
+    },
+    {
+        path: '/demo/g',
+        name: 'demo-g',
+        component: () => import('@/pages/demo/VariantG.vue'),
+    },
+    {
+        path: '/demo/h',
+        name: 'demo-h',
+        component: () => import('@/pages/demo/VariantH.vue'),
+    },
+    {
+        path: '/demo/i',
+        name: 'demo-i',
+        component: () => import('@/pages/demo/VariantI.vue'),
+    },
+    {
+        path: '/demo/j',
+        name: 'demo-j',
+        component: () => import('@/pages/demo/VariantJ.vue'),
+    },
+    {
+        path: '/demo/k',
+        name: 'demo-k',
+        component: () => import('@/pages/demo/VariantK.vue'),
+    },
+    {
+        path: '/demo/l',
+        name: 'demo-l',
+        component: () => import('@/pages/demo/VariantL.vue'),
+    },
+    {
+        path: '/demo/m',
+        name: 'demo-m',
+        component: () => import('@/pages/demo/VariantM.vue'),
+    },
+    {
+        path: '/demo/n',
+        name: 'demo-n',
+        component: () => import('@/pages/demo/VariantN.vue'),
+    },
+    {
+        path: '/demo/o',
+        name: 'demo-o',
+        component: () => import('@/pages/demo/VariantO.vue'),
+    },
+    {
+        path: '/demo/p',
+        name: 'demo-p',
+        component: () => import('@/pages/demo/VariantP.vue'),
+    },
+    {
+        path: '/demo/q',
+        name: 'demo-q',
+        component: () => import('@/pages/demo/VariantQ.vue'),
+    },
+    {
+        path: '/demo/r',
+        name: 'demo-r',
+        component: () => import('@/pages/demo/VariantR.vue'),
+    },
+    {
         path: '/login',
         name: 'login',
         component: () => import('@/pages/Login.vue'),
