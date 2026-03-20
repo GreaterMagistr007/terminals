@@ -13,7 +13,7 @@ class PointController extends Controller
     /** Список всех точек с настройками */
     public function index(): JsonResponse
     {
-        $terminals = VendistaTerminal::with(['settings', 'ingredients'])
+        $terminals = VendistaTerminal::with(['settings.warehouse', 'ingredients'])
             ->orderBy('comment')
             ->get();
 

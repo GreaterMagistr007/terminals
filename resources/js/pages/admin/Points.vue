@@ -32,6 +32,9 @@
                         <p v-if="terminal.settings?.address" class="mt-0.5 truncate text-sm text-gray-500 dark:text-gray-400">
                             {{ terminal.settings.address }}
                         </p>
+                        <p v-if="terminal.settings?.warehouse" class="mt-0.5 text-sm text-gray-400 dark:text-gray-500">
+                            Склад: {{ terminal.settings.warehouse.name }}
+                        </p>
                     </div>
                     <div class="ml-3 flex shrink-0 flex-wrap items-center justify-end gap-1">
                         <span
