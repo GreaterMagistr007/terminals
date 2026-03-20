@@ -106,6 +106,12 @@ const routes = [
         meta: { guest: true },
     },
     {
+        path: '/service/:id',
+        name: 'service',
+        component: () => import('@/pages/Service.vue'),
+        meta: { auth: true },
+    },
+    {
         path: '/',
         component: AppLayout,
         meta: { auth: true },

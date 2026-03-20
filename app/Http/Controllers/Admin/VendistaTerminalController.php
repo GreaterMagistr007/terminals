@@ -17,6 +17,12 @@ class VendistaTerminalController extends Controller
         return response()->json(['terminals' => $terminals]);
     }
 
+    /** Один терминал по ID */
+    public function show(VendistaTerminal $terminal): JsonResponse
+    {
+        return response()->json(['terminal' => $terminal]);
+    }
+
     /** Принудительная синхронизация терминалов из Vendista API */
     public function sync(VendistaService $vendistaService): JsonResponse
     {
