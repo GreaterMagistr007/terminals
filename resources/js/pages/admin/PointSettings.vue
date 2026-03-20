@@ -105,9 +105,9 @@
         </div>
 
         <!-- Модальное окно карты -->
-        <div v-if="mapOpen" class="fixed inset-0 z-50 flex flex-col bg-white dark:bg-gray-900">
+        <div v-if="mapOpen" class="fixed inset-0 z-50 flex h-dvh max-h-dvh flex-col overflow-hidden bg-white dark:bg-gray-900">
             <!-- Хедер карты -->
-            <div class="flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-gray-800">
+            <div class="shrink-0 flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-gray-800">
                 <h2 class="text-lg font-bold text-gray-900 dark:text-white">{{ terminal?.comment || 'Местоположение' }}</h2>
                 <button
                     @click="cancelMap"
@@ -120,16 +120,16 @@
             </div>
 
             <!-- Контейнер карты -->
-            <div ref="mapContainer" class="flex-1"></div>
+            <div ref="mapContainer" class="min-h-0 flex-1"></div>
 
             <!-- Информация о выбранной точке -->
-            <div v-if="mapAddress || mapCoords" class="border-t border-gray-200 px-4 py-2 dark:border-gray-800">
+            <div v-if="mapAddress || mapCoords" class="shrink-0 border-t border-gray-200 px-4 py-2 dark:border-gray-800">
                 <p v-if="mapAddress" class="text-sm text-gray-700 dark:text-gray-300">{{ mapAddress }}</p>
                 <p v-if="mapCoords" class="text-xs text-gray-400 dark:text-gray-500">{{ mapCoords[0] }}, {{ mapCoords[1] }}</p>
             </div>
 
             <!-- Кнопки -->
-            <div class="flex gap-3 border-t border-gray-200 p-4 dark:border-gray-800">
+            <div class="shrink-0 flex gap-3 border-t border-gray-200 p-4 dark:border-gray-800">
                 <button
                     @click="cancelMap"
                     class="rounded-lg bg-gray-200 px-4 py-2.5 font-medium text-gray-700 transition-colors hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
