@@ -116,6 +116,11 @@ const routes = [
                 component: () => import('@/pages/Home.vue'),
             },
             {
+                path: 'sales',
+                name: 'sales',
+                component: () => import('@/pages/Sales.vue'),
+            },
+            {
                 path: 'admin/users',
                 name: 'admin-users',
                 component: () => import('@/pages/admin/Users.vue'),
