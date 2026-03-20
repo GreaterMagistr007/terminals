@@ -13,7 +13,7 @@ class PointController extends Controller
     /** Список всех точек с настройками */
     public function index(): JsonResponse
     {
-        $terminals = VendistaTerminal::with('settings')
+        $terminals = VendistaTerminal::with(['settings', 'ingredients'])
             ->orderBy('comment')
             ->get();
 
@@ -94,5 +94,30 @@ class PointController extends Controller
         $terminal->load('ingredients');
 
         return response()->json(['ingredients' => $terminal->ingredients]);
+    }
+
+    /** Импорт ингредиентов с другой точки (с сохранением порядка) */
+    public function importIngredients(Request $request, VendistaTerminal $terminal): JsonResponse
+    {
+        $validated = $request->validate([
+            'source_terminal_id' => ['required', 'integer', 'exists:vendista_terminals,id'],
+        ]);
+
+        $source = VendistaTerminal::findOrFail($validated['source_terminal_id']);
+        $sourceIngredients = $source->ingredients()->get();
+
+        // Заменяем текущие ингредиенты на ингредиенты источника с тем же порядком
+        $syncData = [];
+        foreach ($sourceIngredients as $ingredient) {
+            $syncData[$ingredient->id] = ['sort_order' => $ingredient->pivot->sort_order];
+        }
+
+        $terminal->ingredients()->sync($syncData);
+        $terminal->load('ingredients');
+
+        return response()->json([
+            'ingredients' => $terminal->ingredients,
+            'source_name' => $source->comment,
+        ]);
     }
 }

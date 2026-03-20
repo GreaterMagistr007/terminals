@@ -39,6 +39,16 @@
                 </button>
             </div>
 
+            <!-- Дата и время обслуживания (шаг 1 и шаг 4) -->
+            <div v-if="currentStep === 1 || currentStep === totalSteps" class="mb-5 rounded-2xl bg-white p-4 shadow-sm dark:bg-gray-900">
+                <label class="mb-2 block text-sm font-semibold text-gray-700 dark:text-gray-300">Дата и время обслуживания</label>
+                <input
+                    type="datetime-local"
+                    v-model="visitedAt"
+                    class="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-900 focus:border-blue-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-400 dark:border-gray-700 dark:bg-gray-800 dark:text-white dark:focus:border-blue-500"
+                />
+            </div>
+
             <!-- Шаг 1: Вода -->
             <div v-if="currentStep === 1">
                 <h2 class="mb-1 text-lg font-bold text-gray-900 dark:text-white">Уровень воды</h2>
@@ -317,6 +327,20 @@ const route = useRoute();
 const terminal = ref(null);
 const currentStep = ref(1);
 const totalSteps = 4;
+
+/** Текущее время по Иркутску в формате datetime-local (YYYY-MM-DDTHH:MM) */
+function nowIrkutsk() {
+    const now = new Date();
+    const parts = new Intl.DateTimeFormat('sv-SE', {
+        timeZone: 'Asia/Irkutsk',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit',
+    }).formatToParts(now);
+    const get = (type) => parts.find(p => p.type === type)?.value || '';
+    return `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}`;
+}
+
+const visitedAt = ref(nowIrkutsk());
 
 const water = reactive({ main: 0.5, spare: 0.0 });
 

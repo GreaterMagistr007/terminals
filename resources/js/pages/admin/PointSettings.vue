@@ -120,6 +120,13 @@
             <div class="rounded-lg bg-white p-4 shadow dark:bg-gray-800">
                 <div class="flex items-center justify-between">
                     <p class="font-medium text-gray-900 dark:text-white">Ингредиенты</p>
+                    <div class="flex items-center gap-2">
+                        <button
+                            @click="showImportModal = true"
+                            class="rounded border border-gray-300 px-3 py-1 text-sm text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-700 transition-colors"
+                        >
+                            Импортировать
+                        </button>
                     <div class="relative" ref="dropdownRef">
                         <button
                             @click="showIngredientDropdown = !showIngredientDropdown"
@@ -141,6 +148,7 @@
                                 {{ ing.name }}
                             </button>
                         </div>
+                    </div>
                     </div>
                 </div>
 
@@ -177,6 +185,48 @@
             <div v-if="saveError" class="rounded-lg bg-red-100 p-3 text-sm text-red-800 dark:bg-red-900/40 dark:text-red-300">
                 {{ saveError }}
             </div>
+        </div>
+
+        <!-- Модалка импорта ингредиентов -->
+        <div v-if="showImportModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showImportModal = false">
+            <div class="mx-4 w-full max-w-sm rounded-lg bg-white p-6 shadow-xl dark:bg-gray-800">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Импорт ингредиентов</h3>
+                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Выберите точку, из которой скопировать список ингредиентов</p>
+                <select
+                    v-model.number="importSourceId"
+                    class="mt-4 block w-full rounded border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                >
+                    <option :value="null" disabled>Выберите точку</option>
+                    <option
+                        v-for="t in importableTerminals"
+                        :key="t.id"
+                        :value="t.id"
+                    >{{ t.comment || 'Без описания' }}</option>
+                </select>
+                <div class="mt-4 flex gap-2 justify-end">
+                    <button
+                        @click="showImportModal = false"
+                        class="rounded bg-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-400 dark:bg-gray-600 dark:text-gray-200 transition-colors"
+                    >
+                        Отмена
+                    </button>
+                    <button
+                        @click="importIngredients"
+                        :disabled="!importSourceId || importing"
+                        class="rounded bg-blue-500 px-4 py-2 text-sm text-white hover:bg-blue-600 disabled:opacity-50 transition-colors"
+                    >
+                        {{ importing ? 'Импорт...' : 'Импортировать' }}
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Уведомление об успешном действии -->
+        <div
+            v-if="successMessage"
+            class="fixed bottom-4 left-1/2 z-50 -translate-x-1/2 rounded-lg bg-green-500 px-6 py-3 text-sm text-white shadow-lg"
+        >
+            {{ successMessage }}
         </div>
 
         <!-- Модальное окно карты -->
@@ -251,6 +301,21 @@ const showIngredientDropdown = ref(false);
 const dropdownRef = ref(null);
 const ingredientListRef = ref(null);
 let sortableInstance = null;
+
+// Импорт ингредиентов
+const showImportModal = ref(false);
+const importSourceId = ref(null);
+const importing = ref(false);
+const allTerminals = ref([]);
+const successMessage = ref('');
+let successTimer = null;
+
+/** Точки с ингредиентами, кроме текущей */
+const importableTerminals = computed(() => {
+    return allTerminals.value.filter(t =>
+        t.id !== Number(terminalId) && t.ingredients?.length
+    );
+});
 
 /** Доступные для добавления ингредиенты (ещё не привязанные) */
 const availableIngredients = computed(() => {
@@ -398,6 +463,45 @@ watch(terminalIngredients, async () => {
     await nextTick();
     initSortable();
 });
+
+/** Загрузка всех точек (для импорта) */
+async function fetchAllTerminals() {
+    try {
+        const { data } = await apiClient.get('/admin/points');
+        allTerminals.value = data.terminals;
+    } catch {
+        // Не критично
+    }
+}
+
+/** Импорт ингредиентов с другой точки */
+async function importIngredients() {
+    if (!importSourceId.value) return;
+    importing.value = true;
+    try {
+        const { data } = await apiClient.post(`/admin/points/${terminalId}/ingredients/import`, {
+            source_terminal_id: importSourceId.value,
+        });
+        terminalIngredients.value = data.ingredients;
+        showImportModal.value = false;
+        importSourceId.value = null;
+        showSuccess(`Список ингредиентов успешно импортирован с точки "${data.source_name}"`);
+    } catch (error) {
+        saveError.value = error.response?.data?.message || 'Не удалось импортировать ингредиенты';
+        showImportModal.value = false;
+    } finally {
+        importing.value = false;
+    }
+}
+
+/** Показать уведомление */
+function showSuccess(message) {
+    successMessage.value = message;
+    if (successTimer) clearTimeout(successTimer);
+    successTimer = setTimeout(() => {
+        successMessage.value = '';
+    }, 4000);
+}
 
 /** Закрытие выпадающего списка при клике вне */
 function handleClickOutside(event) {
@@ -704,6 +808,7 @@ onMounted(() => {
     fetchTerminal();
     fetchAllIngredients();
     fetchWarehouses();
+    fetchAllTerminals();
     document.addEventListener('click', handleClickOutside);
 });
 
@@ -713,5 +818,6 @@ onBeforeUnmount(() => {
         sortableInstance.destroy();
         sortableInstance = null;
     }
+    if (successTimer) clearTimeout(successTimer);
 });
 </script>
