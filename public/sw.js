@@ -31,6 +31,11 @@ self.addEventListener('fetch', (event) => {
     const { request } = event;
     const url = new URL(request.url);
 
+    // Игнорируем не-HTTP запросы (chrome-extension://, etc.)
+    if (!url.protocol.startsWith('http')) {
+        return;
+    }
+
     // API-запросы: Network Only, при ошибке — JSON-ответ offline
     if (url.pathname.startsWith('/api/')) {
         event.respondWith(
