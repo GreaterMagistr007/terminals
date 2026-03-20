@@ -48,8 +48,8 @@
                         <input
                             v-model.number="newIngredient.quantity_per_package"
                             type="number"
-                            min="1"
-                            step="1"
+                            min="0.001"
+                            step="0.01"
                             class="mt-1 block w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                         />
                         <p class="mt-1 text-xs text-gray-400 dark:text-gray-500">Сколько единиц в одной таре (упаковке), которую оператор носит на точку</p>
@@ -143,8 +143,8 @@
                                 <input
                                     v-model.number="editForm.quantity_per_package"
                                     type="number"
-                                    min="1"
-                                    step="1"
+                                    min="0.001"
+                                    step="0.01"
                                     class="mt-1 block w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                                 />
                             </div>
@@ -739,7 +739,7 @@ async function createIngredient() {
 
         const { data } = await apiClient.post('/admin/ingredients', payload);
         ingredients.value.push(data.ingredient);
-        ingredients.value.sort((a, b) => a.name.localeCompare(b.name));
+        ingredients.value.sort((a, b) => (a.short_name || a.name).localeCompare(b.short_name || b.name));
         newIngredient.value = { name: '', short_name: null, unit: 'упаковка', cost_per_unit: 0, quantity_per_package: 1, quantity_per_box: null, cost_per_unit_in_box: null };
         showCreateForm.value = false;
     } catch (error) {
@@ -789,7 +789,7 @@ async function saveEdit(ingredient) {
 
         const { data } = await apiClient.put(`/admin/ingredients/${ingredient.id}`, payload);
         Object.assign(ingredient, data.ingredient);
-        ingredients.value.sort((a, b) => a.name.localeCompare(b.name));
+        ingredients.value.sort((a, b) => (a.short_name || a.name).localeCompare(b.short_name || b.name));
         editingId.value = null;
     } catch (error) {
         editError.value = error.response?.data?.message || 'Не удалось сохранить изменения';

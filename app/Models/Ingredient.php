@@ -22,7 +22,7 @@ class Ingredient extends Model
     {
         return [
             'cost_per_unit' => 'float',
-            'quantity_per_package' => 'integer',
+            'quantity_per_package' => 'float',
             'quantity_per_box' => 'integer',
             'cost_per_unit_in_box' => 'float',
             'is_active' => 'boolean',

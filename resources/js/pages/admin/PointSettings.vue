@@ -98,6 +98,55 @@
                 </div>
             </button>
 
+            <!-- Блок: используемые ингредиенты -->
+            <div class="rounded-lg bg-white p-4 shadow dark:bg-gray-800">
+                <div class="flex items-center justify-between">
+                    <p class="font-medium text-gray-900 dark:text-white">Ингредиенты</p>
+                    <div class="relative" ref="dropdownRef">
+                        <button
+                            @click="showIngredientDropdown = !showIngredientDropdown"
+                            :disabled="!availableIngredients.length"
+                            class="rounded bg-blue-500 px-3 py-1 text-sm text-white hover:bg-blue-600 disabled:opacity-50 transition-colors"
+                        >
+                            Добавить
+                        </button>
+                        <div
+                            v-if="showIngredientDropdown && availableIngredients.length"
+                            class="absolute right-0 z-20 mt-1 max-h-60 w-56 overflow-y-auto rounded-lg bg-white py-1 shadow-lg ring-1 ring-black/5 dark:bg-gray-700 dark:ring-white/10"
+                        >
+                            <button
+                                v-for="ing in availableIngredients"
+                                :key="ing.id"
+                                @click="addIngredient(ing.id)"
+                                class="flex w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-600"
+                            >
+                                {{ ing.name }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div v-if="terminalIngredients.length" class="mt-3 space-y-1">
+                    <div
+                        v-for="ing in terminalIngredients"
+                        :key="ing.id"
+                        class="flex items-center justify-between rounded px-2 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                    >
+                        <span class="text-sm text-gray-700 dark:text-gray-300">{{ ing.name }}</span>
+                        <button
+                            @click="removeIngredient(ing.id)"
+                            class="flex h-6 w-6 shrink-0 items-center justify-center rounded text-gray-400 hover:bg-gray-200 hover:text-red-500 dark:hover:bg-gray-600 dark:hover:text-red-400 transition-colors"
+                            title="Убрать"
+                        >
+                            <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                <p v-else class="mt-3 text-sm text-gray-400 dark:text-gray-500">Ингредиенты не выбраны</p>
+            </div>
+
             <!-- Сообщение об ошибке -->
             <div v-if="saveError" class="rounded-lg bg-red-100 p-3 text-sm text-red-800 dark:bg-red-900/40 dark:text-red-300">
                 {{ saveError }}
@@ -156,7 +205,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import { useRoute } from 'vue-router';
 import apiClient from '@/api/client';
 
@@ -167,6 +216,20 @@ const terminal = ref(null);
 const loading = ref(true);
 const saving = ref(false);
 const saveError = ref('');
+
+// Ингредиенты
+const allIngredients = ref([]);
+const terminalIngredients = ref([]);
+const showIngredientDropdown = ref(false);
+const dropdownRef = ref(null);
+
+/** Доступные для добавления ингредиенты (ещё не привязанные) */
+const availableIngredients = computed(() => {
+    const assignedIds = new Set(terminalIngredients.value.map(i => i.id));
+    return allIngredients.value
+        .filter(i => !assignedIds.has(i.id))
+        .sort((a, b) => (a.short_name || a.name).localeCompare(b.short_name || b.name));
+});
 
 // Настройки точки (локальное состояние)
 const settings = ref({
@@ -204,6 +267,7 @@ async function fetchTerminal() {
     try {
         const { data } = await apiClient.get(`/admin/points/${terminalId}`);
         terminal.value = data.terminal;
+        terminalIngredients.value = data.terminal.ingredients || [];
 
         if (data.terminal.settings) {
             settings.value = {
@@ -216,6 +280,46 @@ async function fetchTerminal() {
         }
     } finally {
         loading.value = false;
+    }
+}
+
+/** Загрузка всех ингредиентов */
+async function fetchAllIngredients() {
+    try {
+        const { data } = await apiClient.get('/admin/ingredients');
+        allIngredients.value = data.ingredients;
+    } catch {
+        // Не критично — выпадающий список просто будет пустым
+    }
+}
+
+/** Добавление ингредиента к точке */
+async function addIngredient(ingredientId) {
+    showIngredientDropdown.value = false;
+    try {
+        const { data } = await apiClient.post(`/admin/points/${terminalId}/ingredients`, {
+            ingredient_id: ingredientId,
+        });
+        terminalIngredients.value = data.ingredients;
+    } catch (error) {
+        saveError.value = error.response?.data?.message || 'Не удалось добавить ингредиент';
+    }
+}
+
+/** Удаление ингредиента с точки */
+async function removeIngredient(ingredientId) {
+    try {
+        const { data } = await apiClient.delete(`/admin/points/${terminalId}/ingredients/${ingredientId}`);
+        terminalIngredients.value = data.ingredients;
+    } catch (error) {
+        saveError.value = error.response?.data?.message || 'Не удалось убрать ингредиент';
+    }
+}
+
+/** Закрытие выпадающего списка при клике вне */
+function handleClickOutside(event) {
+    if (dropdownRef.value && !dropdownRef.value.contains(event.target)) {
+        showIngredientDropdown.value = false;
     }
 }
 
@@ -511,5 +615,13 @@ function destroyMap() {
     placemark = null;
 }
 
-onMounted(fetchTerminal);
+onMounted(() => {
+    fetchTerminal();
+    fetchAllIngredients();
+    document.addEventListener('click', handleClickOutside);
+});
+
+onBeforeUnmount(() => {
+    document.removeEventListener('click', handleClickOutside);
+});
 </script>

@@ -20,7 +20,7 @@
             <!-- Список точек -->
             <div v-else-if="terminals.length" class="space-y-2">
                 <router-link
-                    v-for="terminal in terminals"
+                    v-for="terminal in sortedTerminals"
                     :key="terminal.id"
                     :to="{ name: 'admin-point-settings', params: { id: terminal.id } }"
                     class="flex items-center justify-between rounded-lg bg-white p-4 shadow transition-colors hover:bg-gray-50 active:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-750 dark:active:bg-gray-700"
@@ -101,10 +101,20 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import apiClient from '@/api/client';
 
 const terminals = ref([]);
+
+/** Отсортированный список: скрытые точки в конце */
+const sortedTerminals = computed(() => {
+    return [...terminals.value].sort((a, b) => {
+        const aHidden = a.settings?.hidden ? 1 : 0;
+        const bHidden = b.settings?.hidden ? 1 : 0;
+        if (aHidden !== bHidden) return aHidden - bHidden;
+        return (a.comment || '').localeCompare(b.comment || '');
+    });
+});
 const loading = ref(true);
 const syncing = ref(false);
 const showReport = ref(false);

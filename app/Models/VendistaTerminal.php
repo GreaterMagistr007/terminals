@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class VendistaTerminal extends Model
@@ -35,5 +36,11 @@ class VendistaTerminal extends Model
     public function settings(): HasOne
     {
         return $this->hasOne(TerminalSetting::class);
+    }
+
+    /** Используемые ингредиенты */
+    public function ingredients(): BelongsToMany
+    {
+        return $this->belongsToMany(Ingredient::class, 'terminal_ingredients');
     }
 }

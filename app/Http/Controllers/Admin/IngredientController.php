@@ -12,7 +12,9 @@ class IngredientController extends Controller
     /** Список всех ингредиентов */
     public function index(): JsonResponse
     {
-        $ingredients = Ingredient::with('warehouseStocks.warehouse')->orderBy('name')->get();
+        $ingredients = Ingredient::with('warehouseStocks.warehouse')
+            ->orderByRaw("COALESCE(NULLIF(short_name, ''), name)")
+            ->get();
 
         return response()->json(['ingredients' => $ingredients]);
     }
@@ -25,7 +27,7 @@ class IngredientController extends Controller
             'short_name' => ['nullable', 'string', 'max:50'],
             'unit' => ['string', 'max:100'],
             'cost_per_unit' => ['numeric', 'min:0'],
-            'quantity_per_package' => ['integer', 'min:1'],
+            'quantity_per_package' => ['numeric', 'min:0.001'],
             'quantity_per_box' => ['nullable', 'integer', 'min:1'],
             'cost_per_unit_in_box' => ['nullable', 'numeric', 'min:0'],
             'is_active' => ['boolean'],
@@ -44,7 +46,7 @@ class IngredientController extends Controller
             'short_name' => ['nullable', 'string', 'max:50'],
             'unit' => ['string', 'max:100'],
             'cost_per_unit' => ['numeric', 'min:0'],
-            'quantity_per_package' => ['integer', 'min:1'],
+            'quantity_per_package' => ['numeric', 'min:0.001'],
             'quantity_per_box' => ['nullable', 'integer', 'min:1'],
             'cost_per_unit_in_box' => ['nullable', 'numeric', 'min:0'],
             'is_active' => ['boolean'],

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Ingredient;
 use App\Models\VendistaTerminal;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -19,10 +20,10 @@ class PointController extends Controller
         return response()->json(['terminals' => $terminals]);
     }
 
-    /** Одна точка с настройками */
+    /** Одна точка с настройками и ингредиентами */
     public function show(VendistaTerminal $terminal): JsonResponse
     {
-        $terminal->load('settings');
+        $terminal->load(['settings', 'ingredients']);
 
         return response()->json(['terminal' => $terminal]);
     }
@@ -46,5 +47,27 @@ class PointController extends Controller
         $terminal->load('settings');
 
         return response()->json(['terminal' => $terminal]);
+    }
+
+    /** Добавление ингредиента к точке */
+    public function addIngredient(Request $request, VendistaTerminal $terminal): JsonResponse
+    {
+        $validated = $request->validate([
+            'ingredient_id' => ['required', 'integer', 'exists:ingredients,id'],
+        ]);
+
+        $terminal->ingredients()->syncWithoutDetaching([$validated['ingredient_id']]);
+        $terminal->load('ingredients');
+
+        return response()->json(['ingredients' => $terminal->ingredients]);
+    }
+
+    /** Удаление ингредиента с точки */
+    public function removeIngredient(VendistaTerminal $terminal, Ingredient $ingredient): JsonResponse
+    {
+        $terminal->ingredients()->detach($ingredient->id);
+        $terminal->load('ingredients');
+
+        return response()->json(['ingredients' => $terminal->ingredients]);
     }
 }
