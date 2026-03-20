@@ -631,10 +631,7 @@ async function saveVisit() {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
 
-        showToast('success', 'Визит сохранён');
-        setTimeout(() => {
-            router.push('/');
-        }, 3000);
+        router.push('/');
     } catch (error) {
         const message = error.response?.data?.message
             || error.response?.data?.errors && Object.values(error.response.data.errors).flat().join(', ')
