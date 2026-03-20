@@ -111,7 +111,7 @@ class VendistaTerminalController extends Controller
     /** Обновление транзакций из Vendista + возврат данных терминалов */
     public function refresh(VendistaService $vendistaService): JsonResponse
     {
-        // Получаем последние транзакции, игнорируя ошибку
+        // Принудительное обновление транзакций, игнорируя ошибку
         $vendistaService->fetchLatestTransactions();
 
         return $this->index();

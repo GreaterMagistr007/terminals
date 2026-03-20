@@ -14,6 +14,8 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->statefulApi();
+        // Запрет кеширования API-ответов браузером
+        $middleware->api(append: [\App\Http\Middleware\NoCacheApi::class]);
         $middleware->alias([
             'active' => \App\Http\Middleware\EnsureUserIsActive::class,
             'admin' => \App\Http\Middleware\EnsureUserIsAdmin::class,

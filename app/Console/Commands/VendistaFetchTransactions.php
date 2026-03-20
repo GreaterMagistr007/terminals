@@ -15,7 +15,7 @@ class VendistaFetchTransactions extends Command
     {
         $this->info('Получение последних транзакций из Vendista API...');
 
-        $report = $vendistaService->fetchLatestTransactions(force: true);
+        $report = $vendistaService->fetchLatestTransactions();
 
         if ($report === null) {
             $this->error('Не удалось получить данные из Vendista API');

@@ -14,7 +14,7 @@ class SalesController extends Controller
     /** Обновление транзакций из Vendista + возврат продаж за сегодня */
     public function refresh(VendistaService $vendistaService): JsonResponse
     {
-        // Получаем последние транзакции, игнорируя ошибку
+        // Принудительное обновление транзакций, игнорируя ошибку
         $vendistaService->fetchLatestTransactions();
 
         return $this->today();
