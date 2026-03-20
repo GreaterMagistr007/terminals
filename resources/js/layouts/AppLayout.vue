@@ -14,17 +14,12 @@
             <!-- Выпадающее меню -->
             <div v-if="showMenu" class="border-t border-gray-100 bg-white px-4 py-2 dark:border-gray-700 dark:bg-gray-800">
                 <p class="mb-2 text-sm font-medium text-gray-900 dark:text-white">{{ authStore.user?.name }}</p>
-                <div class="flex flex-wrap gap-2">
+                <div v-if="authStore.isAdmin" class="flex flex-wrap gap-2">
                     <router-link
-                        v-if="authStore.isAdmin"
                         to="/admin/terminals"
                         @click="showMenu = false"
                         class="rounded-lg bg-gray-100 px-3 py-1.5 text-xs text-gray-600 active:bg-gray-200 dark:bg-gray-700 dark:text-gray-300"
                     >Админка</router-link>
-                    <button
-                        @click="logout"
-                        class="rounded-lg bg-red-50 px-3 py-1.5 text-xs text-red-500 active:bg-red-100 dark:bg-red-900/20 dark:text-red-400"
-                    >Выход</button>
                 </div>
             </div>
         </header>

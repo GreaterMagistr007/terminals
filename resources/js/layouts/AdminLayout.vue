@@ -48,15 +48,15 @@
                         <p class="truncate text-sm font-medium text-gray-900 dark:text-white">{{ authStore.user?.name }}</p>
                         <p class="text-xs text-gray-400 dark:text-gray-500">Администратор</p>
                     </div>
-                    <button
-                        @click="logout"
-                        class="shrink-0 rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-red-500 active:bg-gray-200 dark:hover:bg-gray-800 dark:hover:text-red-400 transition-colors"
-                        title="Выход"
+                    <router-link
+                        to="/"
+                        class="shrink-0 rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-blue-500 active:bg-gray-200 dark:hover:bg-gray-800 dark:hover:text-blue-400 transition-colors"
+                        title="Режим оператора"
                     >
                         <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
                         </svg>
-                    </button>
+                    </router-link>
                 </div>
             </div>
         </aside>
@@ -163,9 +163,4 @@ function isActive(routeName) {
     return route.name === routeName;
 }
 
-async function logout() {
-    sidebarOpen.value = false;
-    await authStore.logout();
-    router.replace('/login');
-}
 </script>
