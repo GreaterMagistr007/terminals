@@ -1,5 +1,26 @@
 <template>
     <div class="flex min-h-screen flex-col bg-gray-50 dark:bg-gray-950">
+        <!-- Тост-уведомление -->
+        <Transition
+            enter-active-class="transition duration-300 ease-out"
+            enter-from-class="translate-y-[-100%] opacity-0"
+            enter-to-class="translate-y-0 opacity-100"
+            leave-active-class="transition duration-200 ease-in"
+            leave-from-class="translate-y-0 opacity-100"
+            leave-to-class="translate-y-[-100%] opacity-0"
+        >
+            <div v-if="toast.visible" class="fixed inset-x-0 top-0 z-50 px-4 pt-4">
+                <div
+                    class="rounded-xl px-4 py-3 text-sm font-medium shadow-lg"
+                    :class="toast.type === 'success'
+                        ? 'bg-green-500 text-white'
+                        : 'bg-red-500 text-white'"
+                >
+                    {{ toast.message }}
+                </div>
+            </div>
+        </Transition>
+
         <!-- Шапка -->
         <header class="fixed inset-x-0 top-0 z-10 flex items-center gap-3 bg-white px-4 py-3 shadow-sm dark:bg-gray-900">
             <button
@@ -213,6 +234,41 @@
                         >{{ tmpl }}</button>
                     </div>
                 </div>
+
+                <!-- Прикреплённые фото к комментарию -->
+                <div class="mt-6">
+                    <p class="mb-3 text-xs font-semibold text-gray-400 uppercase tracking-wider dark:text-gray-500">Прикрепить фото</p>
+                    <div v-if="commentPhotoPreviews.length" class="mb-3 grid grid-cols-2 gap-2">
+                        <div v-for="(preview, idx) in commentPhotoPreviews" :key="idx" class="group relative">
+                            <img :src="preview" class="h-32 w-full rounded-xl object-cover" alt="Фото" />
+                            <button
+                                @click="removeCommentPhoto(idx)"
+                                class="absolute top-1.5 right-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/50 text-white active:bg-black/70"
+                            >
+                                <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    <button
+                        @click="commentPhotoInput.click()"
+                        class="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-200 bg-white py-3 text-sm font-medium text-gray-500 active:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400 dark:active:bg-gray-800"
+                    >
+                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                        </svg>
+                        Добавить фото
+                    </button>
+                    <input
+                        ref="commentPhotoInput"
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        class="hidden"
+                        @change="onCommentPhotosSelected"
+                    />
+                </div>
             </div>
 
             <!-- Шаг 4: Фото -->
@@ -221,58 +277,74 @@
                 <p class="mb-5 text-sm text-gray-400 dark:text-gray-500">Сделайте 2 фото аппарата</p>
 
                 <div class="space-y-4">
+                    <!-- Фото внутри -->
                     <div
-                        class="group relative flex h-52 flex-col items-center justify-center rounded-2xl border-2 border-dashed bg-white transition-colors dark:bg-gray-900"
+                        class="group relative flex h-52 flex-col items-center justify-center rounded-2xl border-2 border-dashed bg-white transition-colors dark:bg-gray-900 overflow-hidden"
                         :class="photos.inside ? 'border-green-300 dark:border-green-700' : 'border-gray-200 dark:border-gray-700'"
-                        @click="photos.inside = !photos.inside"
                     >
                         <template v-if="!photos.inside">
-                            <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-100 dark:bg-gray-800 mb-3">
+                            <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-100 dark:bg-gray-800 mb-3" @click="photoInsideInput.click()">
                                 <svg class="h-7 w-7 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
                                 </svg>
                             </div>
-                            <span class="text-sm font-medium text-gray-500 dark:text-gray-400">Фото внутри</span>
-                            <span class="mt-1 text-xs text-gray-400 dark:text-gray-500">Нажмите для съёмки</span>
+                            <span class="text-sm font-medium text-gray-500 dark:text-gray-400" @click="photoInsideInput.click()">Фото внутри</span>
+                            <span class="mt-1 text-xs text-gray-400 dark:text-gray-500" @click="photoInsideInput.click()">Нажмите для съёмки</span>
                         </template>
                         <template v-else>
-                            <div class="flex h-full w-full items-center justify-center rounded-2xl bg-green-50 dark:bg-green-900/20">
-                                <div class="text-center">
-                                    <svg class="mx-auto h-12 w-12 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                    </svg>
-                                    <p class="mt-2 text-sm font-medium text-green-600 dark:text-green-400">Фото внутри загружено</p>
-                                </div>
+                            <img :src="photoInsidePreview" class="h-full w-full object-cover" alt="Фото внутри" />
+                            <div class="absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t from-black/60 to-transparent px-3 pb-2 pt-6">
+                                <span class="text-xs font-medium text-white">Фото внутри</span>
+                                <button
+                                    @click="retakePhoto('inside')"
+                                    class="rounded-lg bg-white/20 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm active:bg-white/30"
+                                >Переснять</button>
                             </div>
                         </template>
+                        <input
+                            ref="photoInsideInput"
+                            type="file"
+                            accept="image/*"
+                            capture="environment"
+                            class="hidden"
+                            @change="onPhotoSelected($event, 'inside')"
+                        />
                     </div>
 
+                    <!-- Фото снаружи -->
                     <div
-                        class="group relative flex h-52 flex-col items-center justify-center rounded-2xl border-2 border-dashed bg-white transition-colors dark:bg-gray-900"
+                        class="group relative flex h-52 flex-col items-center justify-center rounded-2xl border-2 border-dashed bg-white transition-colors dark:bg-gray-900 overflow-hidden"
                         :class="photos.outside ? 'border-green-300 dark:border-green-700' : 'border-gray-200 dark:border-gray-700'"
-                        @click="photos.outside = !photos.outside"
                     >
                         <template v-if="!photos.outside">
-                            <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-100 dark:bg-gray-800 mb-3">
+                            <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-100 dark:bg-gray-800 mb-3" @click="photoOutsideInput.click()">
                                 <svg class="h-7 w-7 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
                                 </svg>
                             </div>
-                            <span class="text-sm font-medium text-gray-500 dark:text-gray-400">Фото снаружи</span>
-                            <span class="mt-1 text-xs text-gray-400 dark:text-gray-500">Нажмите для съёмки</span>
+                            <span class="text-sm font-medium text-gray-500 dark:text-gray-400" @click="photoOutsideInput.click()">Фото снаружи</span>
+                            <span class="mt-1 text-xs text-gray-400 dark:text-gray-500" @click="photoOutsideInput.click()">Нажмите для съёмки</span>
                         </template>
                         <template v-else>
-                            <div class="flex h-full w-full items-center justify-center rounded-2xl bg-green-50 dark:bg-green-900/20">
-                                <div class="text-center">
-                                    <svg class="mx-auto h-12 w-12 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                    </svg>
-                                    <p class="mt-2 text-sm font-medium text-green-600 dark:text-green-400">Фото снаружи загружено</p>
-                                </div>
+                            <img :src="photoOutsidePreview" class="h-full w-full object-cover" alt="Фото снаружи" />
+                            <div class="absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t from-black/60 to-transparent px-3 pb-2 pt-6">
+                                <span class="text-xs font-medium text-white">Фото снаружи</span>
+                                <button
+                                    @click="retakePhoto('outside')"
+                                    class="rounded-lg bg-white/20 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm active:bg-white/30"
+                                >Переснять</button>
                             </div>
                         </template>
+                        <input
+                            ref="photoOutsideInput"
+                            type="file"
+                            accept="image/*"
+                            capture="environment"
+                            class="hidden"
+                            @change="onPhotoSelected($event, 'outside')"
+                        />
                     </div>
                 </div>
             </div>
@@ -288,11 +360,21 @@
                 ></button>
             </div>
             <button
-                class="w-full rounded-xl py-3.5 text-sm font-bold text-white shadow-lg transition-all active:scale-[0.98]"
+                class="w-full rounded-xl py-3.5 text-sm font-bold text-white shadow-lg transition-all active:scale-[0.98] disabled:opacity-60 disabled:active:scale-100"
                 :class="currentStep === totalSteps ? 'bg-green-500 active:bg-green-600 shadow-green-500/25' : 'bg-blue-500 active:bg-blue-600 shadow-blue-500/25'"
+                :disabled="saving"
                 @click="nextStep"
             >
-                {{ currentStep === totalSteps ? 'Сохранить' : 'Далее' }}
+                <template v-if="saving">
+                    <svg class="inline-block h-4 w-4 animate-spin mr-1.5" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Сохранение...
+                </template>
+                <template v-else>
+                    {{ currentStep === totalSteps ? 'Сохранить' : 'Далее' }}
+                </template>
             </button>
         </div>
 
@@ -317,7 +399,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import apiClient from '@/api/client';
 
@@ -346,31 +428,46 @@ const water = reactive({ main: 0.5, spare: 0.0 });
 
 const ingredients = ref([]);
 
-const bgClasses = [
-    'bg-amber-100 dark:bg-amber-900/30',
-    'bg-blue-100 dark:bg-blue-900/30',
-    'bg-yellow-100 dark:bg-yellow-900/30',
-    'bg-orange-100 dark:bg-orange-900/30',
-    'bg-green-100 dark:bg-green-900/30',
-    'bg-purple-100 dark:bg-purple-900/30',
-    'bg-pink-100 dark:bg-pink-900/30',
-    'bg-gray-100 dark:bg-gray-800',
-];
-
 const comment = ref('');
 const isRecording = ref(false);
 const templates = ['Всё в норме', 'Требуется ремонт', 'Протечка воды', 'Нужна чистка', 'Аппарат отключён'];
-const photos = reactive({ inside: false, outside: false });
 const showExitModal = ref(false);
 const neededDismissed = ref(false);
+const saving = ref(false);
 
-// TODO: загружать из последнего визита через API (Этап 3)
-const neededItems = ref([
-    { name: 'Молоко', qty: 2 },
-    { name: 'Стаканы', qty: 1 },
-    { name: 'Крышки', qty: 1 },
-    { name: 'Шоколад', qty: 3 },
-]);
+// Геолокация
+const coords = ref({ latitude: null, longitude: null });
+
+// Фото аппарата (inside/outside)
+const photos = reactive({ inside: null, outside: null });
+const photoInsidePreview = ref(null);
+const photoOutsidePreview = ref(null);
+
+// Template refs для file inputs
+const photoInsideInput = ref(null);
+const photoOutsideInput = ref(null);
+const commentPhotoInput = ref(null);
+
+// Фото к комментарию
+const commentPhotos = ref([]);
+const commentPhotoPreviews = ref([]);
+
+// Тост
+const toast = reactive({ visible: false, type: 'success', message: '' });
+let toastTimer = null;
+
+function showToast(type, message) {
+    toast.visible = true;
+    toast.type = type;
+    toast.message = message;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+        toast.visible = false;
+    }, 3000);
+}
+
+// Нужные ингредиенты из последнего визита
+const neededItems = ref([]);
 
 const neededItemsText = computed(() => {
     return neededItems.value
@@ -385,14 +482,23 @@ async function fetchTerminal() {
 
         // Инициализация ингредиентов из привязанных к точке (порядок из sort_order)
         if (data.terminal.ingredients?.length) {
-            ingredients.value = data.terminal.ingredients.map((ing, idx) => ({
+            ingredients.value = data.terminal.ingredients.map((ing) => ({
                 id: ing.id,
                 name: ing.short_name || ing.name,
-                bgClass: bgClasses[idx % bgClasses.length],
                 brought: 0,
                 needed: 0,
                 expanded: false,
             }));
+        }
+
+        // Нужные ингредиенты из последнего визита
+        if (data.terminal.latest_visit?.ingredients?.length) {
+            neededItems.value = data.terminal.latest_visit.ingredients
+                .filter(i => i.needed > 0)
+                .map(i => ({
+                    name: i.ingredient?.short_name || i.ingredient?.name || 'Ингредиент',
+                    qty: i.needed,
+                }));
         }
     } catch {
         router.replace('/');
@@ -418,14 +524,145 @@ function goBack() {
     }
 }
 
+// Фото: выбор файла
+function onPhotoSelected(event, type) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    photos[type] = file;
+    const url = URL.createObjectURL(file);
+    if (type === 'inside') {
+        // Освобождаем предыдущий URL
+        if (photoInsidePreview.value) URL.revokeObjectURL(photoInsidePreview.value);
+        photoInsidePreview.value = url;
+    } else {
+        if (photoOutsidePreview.value) URL.revokeObjectURL(photoOutsidePreview.value);
+        photoOutsidePreview.value = url;
+    }
+}
+
+// Фото: переснять
+function retakePhoto(type) {
+    photos[type] = null;
+    if (type === 'inside') {
+        if (photoInsidePreview.value) URL.revokeObjectURL(photoInsidePreview.value);
+        photoInsidePreview.value = null;
+        if (photoInsideInput.value) photoInsideInput.value.value = '';
+    } else {
+        if (photoOutsidePreview.value) URL.revokeObjectURL(photoOutsidePreview.value);
+        photoOutsidePreview.value = null;
+        if (photoOutsideInput.value) photoOutsideInput.value.value = '';
+    }
+}
+
+// Фото к комментарию: выбор
+function onCommentPhotosSelected(event) {
+    const files = event.target.files;
+    if (!files?.length) return;
+    for (const file of files) {
+        commentPhotos.value.push(file);
+        commentPhotoPreviews.value.push(URL.createObjectURL(file));
+    }
+    // Сброс input для повторного выбора
+    event.target.value = '';
+}
+
+// Фото к комментарию: удаление
+function removeCommentPhoto(idx) {
+    URL.revokeObjectURL(commentPhotoPreviews.value[idx]);
+    commentPhotos.value.splice(idx, 1);
+    commentPhotoPreviews.value.splice(idx, 1);
+}
+
+// Запрос геолокации
+function requestGeolocation() {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+        (position) => {
+            coords.value.latitude = position.coords.latitude;
+            coords.value.longitude = position.coords.longitude;
+        },
+        () => {
+            // Геолокация недоступна или запрещена -- не блокируем работу
+        },
+        { enableHighAccuracy: true, timeout: 10000 }
+    );
+}
+
+// Сохранение визита
+async function saveVisit() {
+    saving.value = true;
+    try {
+        const formData = new FormData();
+        formData.append('terminal_id', route.params.id);
+        formData.append('visited_at', visitedAt.value);
+        formData.append('water_main', water.main);
+        formData.append('water_spare', water.spare);
+        formData.append('comment', comment.value);
+
+        if (coords.value.latitude !== null) {
+            formData.append('latitude', coords.value.latitude);
+        }
+        if (coords.value.longitude !== null) {
+            formData.append('longitude', coords.value.longitude);
+        }
+
+        if (photos.inside) {
+            formData.append('photo_inside', photos.inside);
+        }
+        if (photos.outside) {
+            formData.append('photo_outside', photos.outside);
+        }
+
+        for (const file of commentPhotos.value) {
+            formData.append('comment_photos[]', file);
+        }
+
+        // Ингредиенты: только где brought > 0 или needed > 0
+        const ingredientsData = ingredients.value
+            .filter(ing => ing.brought > 0 || ing.needed > 0)
+            .map(ing => ({
+                ingredient_id: ing.id,
+                brought: ing.brought,
+                needed: ing.needed,
+            }));
+        formData.append('ingredients', JSON.stringify(ingredientsData));
+
+        await apiClient.post('/service-visits', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        });
+
+        showToast('success', 'Визит сохранён');
+        setTimeout(() => {
+            router.push('/');
+        }, 3000);
+    } catch (error) {
+        const message = error.response?.data?.message
+            || error.response?.data?.errors && Object.values(error.response.data.errors).flat().join(', ')
+            || 'Ошибка при сохранении';
+        showToast('error', message);
+    } finally {
+        saving.value = false;
+    }
+}
+
 function nextStep() {
     if (currentStep.value < totalSteps) {
         currentStep.value++;
     } else {
-        // TODO: отправка данных на сервер (Этап 3)
-        router.push('/');
+        saveVisit();
     }
 }
 
-onMounted(fetchTerminal);
+// Освобождение Object URL при размонтировании
+onBeforeUnmount(() => {
+    if (photoInsidePreview.value) URL.revokeObjectURL(photoInsidePreview.value);
+    if (photoOutsidePreview.value) URL.revokeObjectURL(photoOutsidePreview.value);
+    commentPhotoPreviews.value.forEach(url => URL.revokeObjectURL(url));
+    clearTimeout(toastTimer);
+});
+
+onMounted(() => {
+    fetchTerminal();
+    requestGeolocation();
+});
 </script>

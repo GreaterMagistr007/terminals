@@ -13,6 +13,7 @@ class VendistaTerminalController extends Controller
     public function index(): JsonResponse
     {
         $terminals = VendistaTerminal::with(['settings', 'ingredients'])
+            ->withMax('serviceVisits', 'visited_at')
             ->orderBy('comment')
             ->get();
 
@@ -22,7 +23,15 @@ class VendistaTerminalController extends Controller
     /** Один терминал по ID */
     public function show(VendistaTerminal $terminal): JsonResponse
     {
-        $terminal->load(['settings', 'ingredients']);
+        $terminal->load([
+            'settings',
+            'ingredients',
+            'latestVisit.ingredients' => function ($query) {
+                $query->where('needed', '>', 0);
+            },
+            'latestVisit.ingredients.ingredient',
+        ]);
+        $terminal->loadMax('serviceVisits', 'visited_at');
 
         return response()->json(['terminal' => $terminal]);
     }

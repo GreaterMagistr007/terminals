@@ -122,6 +122,11 @@ const routes = [
                 component: () => import('@/pages/Home.vue'),
             },
             {
+                path: 'history/:id',
+                name: 'history',
+                component: () => import('@/pages/ServiceHistory.vue'),
+            },
+            {
                 path: 'sales',
                 name: 'sales',
                 component: () => import('@/pages/Sales.vue'),

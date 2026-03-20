@@ -61,7 +61,7 @@
                         <p class="text-xs text-gray-400 dark:text-gray-500">продаж с последнего обслуживания: 0</p>
                     </div>
                     <div class="shrink-0 flex items-center gap-2">
-                        <span class="text-xs text-gray-400 dark:text-gray-500">{{ formatVisitDate(terminal.last_online_at) }}</span>
+                        <span class="text-xs text-gray-400 dark:text-gray-500">{{ formatVisitDate(terminal.service_visits_max_visited_at) }}</span>
                         <svg class="h-4 w-4 text-gray-300 transition-transform dark:text-gray-600"
                             :class="expandedId === terminal.id ? 'rotate-180' : ''"
                             fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"
@@ -88,7 +88,7 @@
                         </div>
                         <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-800">
                             <p class="text-xs text-gray-400 dark:text-gray-500">Последний визит</p>
-                            <p class="mt-1 text-sm font-semibold text-gray-900 dark:text-white">{{ formatVisitDate(terminal.last_online_at) }}</p>
+                            <p class="mt-1 text-sm font-semibold text-gray-900 dark:text-white">{{ formatVisitDate(terminal.service_visits_max_visited_at) }}</p>
                         </div>
                     </div>
 
@@ -106,12 +106,12 @@
                             </svg>
                             Обслужить
                         </router-link>
-                        <button class="flex items-center justify-center gap-1.5 rounded-lg bg-gray-100 px-4 py-2.5 text-sm font-medium text-gray-700 active:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:active:bg-gray-700">
+                        <router-link :to="{ name: 'history', params: { id: terminal.id } }" class="flex items-center justify-center gap-1.5 rounded-lg bg-gray-100 px-4 py-2.5 text-sm font-medium text-gray-700 active:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:active:bg-gray-700">
                             <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
                             История
-                        </button>
+                        </router-link>
                     </div>
                 </div>
             </div>
@@ -153,8 +153,8 @@ const sortedTerminals = computed(() => {
     }
     // По обслуживанию: от самого давнего (null/старая дата первым) к недавнему
     return list.sort((a, b) => {
-        const dateA = a.last_online_at ? new Date(a.last_online_at).getTime() : 0;
-        const dateB = b.last_online_at ? new Date(b.last_online_at).getTime() : 0;
+        const dateA = a.service_visits_max_visited_at ? new Date(a.service_visits_max_visited_at).getTime() : 0;
+        const dateB = b.service_visits_max_visited_at ? new Date(b.service_visits_max_visited_at).getTime() : 0;
         return dateA - dateB;
     });
 });
@@ -190,7 +190,7 @@ function statusBarClass(terminal) {
  * > 7 дней: "28 января"
  */
 function formatVisitDate(dateStr) {
-    if (!dateStr) return '—';
+    if (!dateStr) return 'Нет данных';
 
     const date = new Date(dateStr);
     const now = new Date();

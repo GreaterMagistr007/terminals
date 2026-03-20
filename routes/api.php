@@ -10,6 +10,7 @@ use App\Http\Controllers\Admin\WarehouseController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Auth\TelegramBotCallbackController;
 use App\Http\Controllers\Auth\TelegramWidgetController;
+use App\Http\Controllers\ServiceVisitController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/health', function () {
@@ -33,6 +34,11 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
     // Терминалы (для всех авторизованных)
     Route::get('/terminals', [VendistaTerminalController::class, 'index']);
     Route::get('/terminals/{terminal}', [VendistaTerminalController::class, 'show']);
+
+    // Обслуживание
+    Route::get('/service-visits', [ServiceVisitController::class, 'index']);
+    Route::post('/service-visits', [ServiceVisitController::class, 'store']);
+    Route::get('/service-visits/{visit}', [ServiceVisitController::class, 'show']);
 
     // Админские маршруты
     Route::middleware('admin')->prefix('admin')->group(function () {

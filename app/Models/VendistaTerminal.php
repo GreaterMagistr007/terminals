@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class VendistaTerminal extends Model
@@ -44,5 +45,17 @@ class VendistaTerminal extends Model
         return $this->belongsToMany(Ingredient::class, 'terminal_ingredients')
             ->withPivot('sort_order')
             ->orderByPivot('sort_order');
+    }
+
+    /** Все визиты обслуживания */
+    public function serviceVisits(): HasMany
+    {
+        return $this->hasMany(ServiceVisit::class, 'terminal_id');
+    }
+
+    /** Последний визит обслуживания */
+    public function latestVisit(): HasOne
+    {
+        return $this->hasOne(ServiceVisit::class, 'terminal_id')->latestOfMany('visited_at');
     }
 }
