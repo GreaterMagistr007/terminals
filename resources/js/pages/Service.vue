@@ -70,8 +70,8 @@
                 />
             </div>
 
-            <!-- Шаг 1: Вода -->
-            <div v-if="currentStep === 1">
+            <!-- Шаг: Вода (только для точек с водой) -->
+            <div v-if="currentStepType === 'water'">
                 <h2 class="mb-1 text-lg font-bold text-gray-900 dark:text-white">Уровень воды</h2>
                 <p class="mb-4 text-sm text-gray-400 dark:text-gray-500">Укажите наполненность бутылей</p>
 
@@ -138,8 +138,8 @@
                 </div>
             </div>
 
-            <!-- Шаг 2: Ингредиенты -->
-            <div v-if="currentStep === 2">
+            <!-- Шаг: Ингредиенты -->
+            <div v-if="currentStepType === 'ingredients'">
                 <h2 class="mb-1 text-lg font-bold text-gray-900 dark:text-white">Ингредиенты</h2>
                 <p class="mb-5 text-sm text-gray-400 dark:text-gray-500">Укажите количество принесённых и нужных</p>
 
@@ -201,8 +201,8 @@
                 </div>
             </div>
 
-            <!-- Шаг 3: Комментарий -->
-            <div v-if="currentStep === 3">
+            <!-- Шаг: Комментарий -->
+            <div v-if="currentStepType === 'comment'">
                 <h2 class="mb-1 text-lg font-bold text-gray-900 dark:text-white">Комментарий</h2>
                 <p class="mb-5 text-sm text-gray-400 dark:text-gray-500">Опишите состояние аппарата или проблемы</p>
 
@@ -286,8 +286,8 @@
                 </div>
             </div>
 
-            <!-- Шаг 4: Фото -->
-            <div v-if="currentStep === 4">
+            <!-- Шаг: Фото -->
+            <div v-if="currentStepType === 'photos'">
                 <h2 class="mb-1 text-lg font-bold text-gray-900 dark:text-white">Фотоотчёт</h2>
                 <p class="mb-5 text-sm text-gray-400 dark:text-gray-500">Сделайте 2 фото аппарата</p>
 
@@ -423,7 +423,19 @@ const route = useRoute();
 
 const terminal = ref(null);
 const currentStep = ref(1);
-const totalSteps = 4;
+
+// Динамический пропуск шага воды для точек с uses_water = false
+const usesWater = computed(() => terminal.value?.settings?.uses_water !== false);
+const totalSteps = computed(() => usesWater.value ? 4 : 3);
+
+// Маппинг номера шага → тип контента
+const steps = computed(() => {
+    const list = [];
+    if (usesWater.value) list.push('water');
+    list.push('ingredients', 'comment', 'photos');
+    return list;
+});
+const currentStepType = computed(() => steps.value[currentStep.value - 1]);
 
 // Режим редактирования
 const isEditMode = ref(false);
@@ -693,8 +705,10 @@ async function saveVisit() {
     try {
         const formData = new FormData();
         formData.append('visited_at', visitedAt.value);
-        formData.append('water_main', water.main);
-        formData.append('water_spare', water.spare);
+        if (usesWater.value) {
+            formData.append('water_main', water.main);
+            formData.append('water_spare', water.spare);
+        }
         formData.append('comment', comment.value);
 
         if (coords.value.latitude !== null) {
@@ -756,7 +770,7 @@ async function saveVisit() {
 }
 
 function nextStep() {
-    if (currentStep.value < totalSteps) {
+    if (currentStep.value < totalSteps.value) {
         currentStep.value++;
     } else {
         saveVisit();
