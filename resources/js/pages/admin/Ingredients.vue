@@ -25,12 +25,45 @@
                         />
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Единица измерения</label>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Краткое название</label>
                         <input
-                            v-model="newIngredient.unit"
+                            v-model="newIngredient.short_name"
                             type="text"
+                            maxlength="50"
+                            placeholder="Для отображения при загрузке в аппарат"
                             class="mt-1 block w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                         />
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Единица измерения</label>
+                        <select
+                            v-model="newIngredient.unit"
+                            class="mt-1 block w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                        >
+                            <option v-for="u in unitOptions" :key="u" :value="u">{{ u }}</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Кол-во в таре</label>
+                        <input
+                            v-model.number="newIngredient.quantity_per_package"
+                            type="number"
+                            min="1"
+                            step="1"
+                            class="mt-1 block w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                        />
+                        <p class="mt-1 text-xs text-gray-400 dark:text-gray-500">Сколько единиц в одной таре (упаковке), которую оператор носит на точку</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Кол-во в коробке</label>
+                        <input
+                            v-model.number="newIngredient.quantity_per_box"
+                            type="number"
+                            min="1"
+                            step="1"
+                            class="mt-1 block w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                        />
+                        <p class="mt-1 text-xs text-gray-400 dark:text-gray-500">Сколько единиц в коробке при оптовой закупке. Пусто = не продаётся коробками</p>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Стоимость за единицу</label>
@@ -41,6 +74,17 @@
                             step="0.01"
                             class="mt-1 block w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                         />
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Цена за ед. при покупке коробкой</label>
+                        <input
+                            v-model.number="newIngredient.cost_per_unit_in_box"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            class="mt-1 block w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                        />
+                        <p class="mt-1 text-xs text-gray-400 dark:text-gray-500">Цена за 1 единицу при покупке коробкой (может быть дешевле поштучной)</p>
                     </div>
                     <div class="flex gap-2">
                         <button type="submit" :disabled="creating" class="rounded bg-green-500 px-4 py-2 text-white hover:bg-green-600 disabled:opacity-50 transition-colors">
@@ -76,17 +120,59 @@
                                 />
                             </div>
                             <div>
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Единица измерения</label>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Краткое название</label>
                                 <input
-                                    v-model="editForm.unit"
+                                    v-model="editForm.short_name"
                                     type="text"
+                                    maxlength="50"
+                                    placeholder="Для отображения при загрузке в аппарат"
                                     class="mt-1 block w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                                 />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Единица измерения</label>
+                                <select
+                                    v-model="editForm.unit"
+                                    class="mt-1 block w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                >
+                                    <option v-for="u in unitOptions" :key="u" :value="u">{{ u }}</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Кол-во в таре</label>
+                                <input
+                                    v-model.number="editForm.quantity_per_package"
+                                    type="number"
+                                    min="1"
+                                    step="1"
+                                    class="mt-1 block w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Кол-во в коробке</label>
+                                <input
+                                    v-model.number="editForm.quantity_per_box"
+                                    type="number"
+                                    min="1"
+                                    step="1"
+                                    class="mt-1 block w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                />
+                                <p class="mt-1 text-xs text-gray-400 dark:text-gray-500">Пусто = не продаётся коробками</p>
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Стоимость за единицу</label>
                                 <input
                                     v-model.number="editForm.cost_per_unit"
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    class="mt-1 block w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Цена за ед. при покупке коробкой</label>
+                                <input
+                                    v-model.number="editForm.cost_per_unit_in_box"
                                     type="number"
                                     min="0"
                                     step="0.01"
@@ -110,13 +196,31 @@
                     <!-- Режим просмотра -->
                     <div v-else class="flex items-center justify-between">
                         <div>
-                            <p class="font-medium text-gray-900 dark:text-white">{{ ingredient.name }}</p>
+                            <p class="font-medium text-gray-900 dark:text-white">
+                                {{ ingredient.name }}
+                                <span v-if="ingredient.short_name" class="ml-1 text-sm font-normal text-gray-400 dark:text-gray-500">({{ ingredient.short_name }})</span>
+                            </p>
                             <p class="text-sm text-gray-500 dark:text-gray-400">
-                                {{ ingredient.unit }}
+                                {{ ingredient.unit }}, {{ ingredient.quantity_per_package }} в таре
                                 <span class="ml-2">{{ formatCost(ingredient.cost_per_unit) }}</span>
+                            </p>
+                            <p v-if="ingredient.quantity_per_box" class="text-xs text-gray-400 dark:text-gray-500">
+                                Коробка: {{ ingredient.quantity_per_box }} шт
+                                <span v-if="ingredient.cost_per_unit_in_box" class="ml-1">/ {{ formatCost(ingredient.cost_per_unit_in_box) }} за ед.</span>
                             </p>
                         </div>
                         <div class="flex items-center gap-2">
+                            <!-- Оприходование -->
+                            <button
+                                @click="openReceipt(ingredient)"
+                                class="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-green-500 active:bg-gray-200 dark:hover:bg-gray-700 dark:hover:text-green-400 transition-colors"
+                                title="Оприходовать"
+                            >
+                                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                                </svg>
+                            </button>
+
                             <!-- Редактирование -->
                             <button
                                 @click="startEdit(ingredient)"
@@ -187,14 +291,151 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Модалка оприходования -->
+            <div v-if="receiptIngredient" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="closeReceipt">
+                <div class="mx-4 w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-gray-800">
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                        Оприходование: {{ receiptIngredient.name }}
+                    </h3>
+
+                    <form @submit.prevent="submitReceipt" class="mt-4 space-y-4">
+                        <!-- Склад -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Склад</label>
+                            <select
+                                v-model.number="receiptForm.warehouse_id"
+                                required
+                                class="mt-1 block w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                            >
+                                <option v-for="w in warehouses" :key="w.id" :value="w.id">{{ w.name }}</option>
+                            </select>
+                        </div>
+
+                        <!-- Режим -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Режим</label>
+                            <div class="mt-1 flex gap-4">
+                                <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                                    <input
+                                        type="radio"
+                                        v-model="receiptForm.source"
+                                        value="unit"
+                                        class="text-blue-500"
+                                    />
+                                    Поштучно
+                                </label>
+                                <label
+                                    class="flex items-center gap-2 text-sm"
+                                    :class="receiptIngredient.quantity_per_box
+                                        ? 'text-gray-700 dark:text-gray-300'
+                                        : 'text-gray-300 dark:text-gray-600'"
+                                >
+                                    <input
+                                        type="radio"
+                                        v-model="receiptForm.source"
+                                        value="box"
+                                        :disabled="!receiptIngredient.quantity_per_box"
+                                        class="text-blue-500"
+                                    />
+                                    Коробками
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Количество -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Количество, {{ receiptForm.source === 'box' ? 'коробок' : receiptIngredient.unit }}
+                            </label>
+                            <input
+                                v-model.number="receiptForm.quantity"
+                                type="number"
+                                min="1"
+                                step="1"
+                                required
+                                class="mt-1 block w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                            />
+                        </div>
+
+                        <!-- Цена за единицу -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Цена за единицу</label>
+                            <input
+                                v-model.number="receiptForm.cost_per_unit"
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                required
+                                class="mt-1 block w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                            />
+                        </div>
+
+                        <!-- Итого -->
+                        <div class="rounded bg-gray-50 p-3 text-sm text-gray-700 dark:bg-gray-700/50 dark:text-gray-300">
+                            <p v-if="receiptForm.source === 'box' && receiptIngredient.quantity_per_box">
+                                {{ receiptForm.quantity || 0 }} коробок
+                                &times; {{ receiptIngredient.quantity_per_box }} шт
+                                = {{ receiptTotalUnits }} шт,
+                                сумма: {{ formatCost(receiptTotalCost) }}
+                            </p>
+                            <p v-else>
+                                {{ receiptForm.quantity || 0 }} {{ receiptIngredient.unit }},
+                                сумма: {{ formatCost(receiptTotalCost) }}
+                            </p>
+                        </div>
+
+                        <!-- Комментарий -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Комментарий</label>
+                            <textarea
+                                v-model="receiptForm.note"
+                                rows="2"
+                                maxlength="500"
+                                class="mt-1 block w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                            ></textarea>
+                        </div>
+
+                        <div class="flex gap-2 justify-end">
+                            <button
+                                type="button"
+                                @click="closeReceipt"
+                                class="rounded bg-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-400 dark:bg-gray-600 dark:text-gray-200 transition-colors"
+                            >
+                                Отмена
+                            </button>
+                            <button
+                                type="submit"
+                                :disabled="submittingReceipt"
+                                class="rounded bg-green-500 px-4 py-2 text-white hover:bg-green-600 disabled:opacity-50 transition-colors"
+                            >
+                                {{ submittingReceipt ? 'Оприходование...' : 'Оприходовать' }}
+                            </button>
+                        </div>
+
+                        <div v-if="receiptError" class="rounded bg-red-100 p-3 text-sm text-red-800 dark:bg-red-900/40 dark:text-red-300">
+                            {{ receiptError }}
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Уведомление об успешном оприходовании -->
+            <div
+                v-if="receiptSuccess"
+                class="fixed bottom-4 left-1/2 z-50 -translate-x-1/2 rounded-lg bg-green-500 px-6 py-3 text-white shadow-lg"
+            >
+                {{ receiptSuccess }}
+            </div>
         </div>
     </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import apiClient from '@/api/client';
 
+const unitOptions = ['упаковка', 'штука', 'килограмм'];
 const ingredients = ref([]);
 const loading = ref(true);
 const showCreateForm = ref(false);
@@ -202,20 +443,62 @@ const creating = ref(false);
 const createError = ref('');
 const saving = ref(false);
 const editingId = ref(null);
-const editForm = ref({ name: '', unit: '', cost_per_unit: 0 });
+const editForm = ref({ name: '', short_name: null, unit: '', quantity_per_package: 1, cost_per_unit: 0, quantity_per_box: null, cost_per_unit_in_box: null });
 const editError = ref('');
 const deletingIngredient = ref(null);
 const deleting = ref(false);
 
 const newIngredient = ref({
     name: '',
+    short_name: null,
     unit: 'упаковка',
+    quantity_per_package: 1,
     cost_per_unit: 0,
+    quantity_per_box: null,
+    cost_per_unit_in_box: null,
+});
+
+// Оприходование
+const receiptIngredient = ref(null);
+const warehouses = ref([]);
+const receiptForm = ref({
+    warehouse_id: null,
+    source: 'unit',
+    quantity: 1,
+    cost_per_unit: 0,
+    note: '',
+});
+const submittingReceipt = ref(false);
+const receiptError = ref('');
+const receiptSuccess = ref('');
+let receiptSuccessTimer = null;
+
+/** Количество единиц при оприходовании */
+const receiptTotalUnits = computed(() => {
+    if (receiptForm.value.source === 'box' && receiptIngredient.value?.quantity_per_box) {
+        return (receiptForm.value.quantity || 0) * receiptIngredient.value.quantity_per_box;
+    }
+    return receiptForm.value.quantity || 0;
+});
+
+/** Общая стоимость оприходования */
+const receiptTotalCost = computed(() => {
+    return receiptTotalUnits.value * (receiptForm.value.cost_per_unit || 0);
+});
+
+/** Предзаполнение цены при смене режима */
+watch(() => receiptForm.value.source, (source) => {
+    if (!receiptIngredient.value) return;
+    if (source === 'box' && receiptIngredient.value.cost_per_unit_in_box) {
+        receiptForm.value.cost_per_unit = receiptIngredient.value.cost_per_unit_in_box;
+    } else {
+        receiptForm.value.cost_per_unit = receiptIngredient.value.cost_per_unit || 0;
+    }
 });
 
 /** Форматирование стоимости */
 function formatCost(value) {
-    return parseFloat(value).toFixed(2) + ' \u20BD';
+    return parseFloat(value || 0).toFixed(2) + ' \u20BD';
 }
 
 /** Загрузка списка ингредиентов */
@@ -233,11 +516,15 @@ async function createIngredient() {
     creating.value = true;
     createError.value = '';
     try {
-        const { data } = await apiClient.post('/admin/ingredients', newIngredient.value);
+        // Очищаем пустые значения полей коробки
+        const payload = { ...newIngredient.value };
+        if (!payload.quantity_per_box) payload.quantity_per_box = null;
+        if (!payload.cost_per_unit_in_box) payload.cost_per_unit_in_box = null;
+
+        const { data } = await apiClient.post('/admin/ingredients', payload);
         ingredients.value.push(data.ingredient);
-        // Пересортировка по имени
         ingredients.value.sort((a, b) => a.name.localeCompare(b.name));
-        newIngredient.value = { name: '', unit: 'упаковка', cost_per_unit: 0 };
+        newIngredient.value = { name: '', short_name: null, unit: 'упаковка', cost_per_unit: 0, quantity_per_package: 1, quantity_per_box: null, cost_per_unit_in_box: null };
         showCreateForm.value = false;
     } catch (error) {
         createError.value = error.response?.data?.message || 'Не удалось создать ингредиент';
@@ -250,7 +537,7 @@ async function createIngredient() {
 function cancelCreate() {
     showCreateForm.value = false;
     createError.value = '';
-    newIngredient.value = { name: '', unit: 'упаковка', cost_per_unit: 0 };
+    newIngredient.value = { name: '', unit: 'упаковка', cost_per_unit: 0, quantity_per_package: 1, quantity_per_box: null, cost_per_unit_in_box: null };
 }
 
 /** Начало редактирования */
@@ -258,8 +545,12 @@ function startEdit(ingredient) {
     editingId.value = ingredient.id;
     editForm.value = {
         name: ingredient.name,
+        short_name: ingredient.short_name,
         unit: ingredient.unit,
+        quantity_per_package: ingredient.quantity_per_package,
         cost_per_unit: ingredient.cost_per_unit,
+        quantity_per_box: ingredient.quantity_per_box,
+        cost_per_unit_in_box: ingredient.cost_per_unit_in_box,
     };
     editError.value = '';
 }
@@ -275,9 +566,13 @@ async function saveEdit(ingredient) {
     saving.value = true;
     editError.value = '';
     try {
-        const { data } = await apiClient.put(`/admin/ingredients/${ingredient.id}`, editForm.value);
+        // Очищаем пустые значения полей коробки
+        const payload = { ...editForm.value };
+        if (!payload.quantity_per_box) payload.quantity_per_box = null;
+        if (!payload.cost_per_unit_in_box) payload.cost_per_unit_in_box = null;
+
+        const { data } = await apiClient.put(`/admin/ingredients/${ingredient.id}`, payload);
         Object.assign(ingredient, data.ingredient);
-        // Пересортировка по имени
         ingredients.value.sort((a, b) => a.name.localeCompare(b.name));
         editingId.value = null;
     } catch (error) {
@@ -315,6 +610,79 @@ async function deleteIngredient() {
     } finally {
         deleting.value = false;
     }
+}
+
+/** Открытие модалки оприходования */
+async function openReceipt(ingredient) {
+    receiptIngredient.value = ingredient;
+    receiptError.value = '';
+    receiptForm.value = {
+        warehouse_id: null,
+        source: 'unit',
+        quantity: 1,
+        cost_per_unit: ingredient.cost_per_unit || 0,
+        note: '',
+    };
+
+    // Загрузка списка складов
+    try {
+        const { data } = await apiClient.get('/admin/warehouses');
+        warehouses.value = data.warehouses;
+        // Предвыбор склада по умолчанию
+        const defaultWarehouse = warehouses.value.find(w => w.is_default);
+        if (defaultWarehouse) {
+            receiptForm.value.warehouse_id = defaultWarehouse.id;
+        } else if (warehouses.value.length) {
+            receiptForm.value.warehouse_id = warehouses.value[0].id;
+        }
+    } catch {
+        receiptError.value = 'Не удалось загрузить список складов';
+    }
+}
+
+/** Закрытие модалки оприходования */
+function closeReceipt() {
+    receiptIngredient.value = null;
+    receiptError.value = '';
+}
+
+/** Отправка оприходования */
+async function submitReceipt() {
+    submittingReceipt.value = true;
+    receiptError.value = '';
+    try {
+        await apiClient.post(`/admin/ingredients/${receiptIngredient.value.id}/receipt`, {
+            warehouse_id: receiptForm.value.warehouse_id,
+            quantity: receiptForm.value.quantity,
+            cost_per_unit: receiptForm.value.cost_per_unit,
+            source: receiptForm.value.source,
+            note: receiptForm.value.note || null,
+        });
+
+        // Обновляем цену ингредиента в списке
+        const ingredient = receiptIngredient.value;
+        if (receiptForm.value.source === 'unit') {
+            ingredient.cost_per_unit = receiptForm.value.cost_per_unit;
+        } else {
+            ingredient.cost_per_unit_in_box = receiptForm.value.cost_per_unit;
+        }
+
+        closeReceipt();
+        showReceiptSuccess('Ингредиент успешно оприходован');
+    } catch (error) {
+        receiptError.value = error.response?.data?.message || 'Не удалось оприходовать ингредиент';
+    } finally {
+        submittingReceipt.value = false;
+    }
+}
+
+/** Показать уведомление об успешном оприходовании */
+function showReceiptSuccess(message) {
+    receiptSuccess.value = message;
+    if (receiptSuccessTimer) clearTimeout(receiptSuccessTimer);
+    receiptSuccessTimer = setTimeout(() => {
+        receiptSuccess.value = '';
+    }, 3000);
 }
 
 onMounted(fetchIngredients);

@@ -1,9 +1,11 @@
 <?php
 
 use App\Http\Controllers\Admin\IngredientController;
+use App\Http\Controllers\Admin\IngredientReceiptController;
 use App\Http\Controllers\Admin\PointController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\VendistaTerminalController;
+use App\Http\Controllers\Admin\WarehouseController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Auth\TelegramBotCallbackController;
 use App\Http\Controllers\Auth\TelegramWidgetController;
@@ -43,6 +45,10 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         Route::put('/points/{terminal}', [PointController::class, 'update']);
 
         Route::apiResource('ingredients', IngredientController::class)->except(['show']);
+        Route::post('/ingredients/{ingredient}/receipt', [IngredientReceiptController::class, 'store']);
+
+        Route::apiResource('warehouses', WarehouseController::class)->except(['show']);
+        Route::get('/warehouses/{warehouse}/stocks', [WarehouseController::class, 'stocks']);
 
         Route::get('/vendista/terminals', [VendistaTerminalController::class, 'index']);
         Route::post('/vendista/terminals/sync', [VendistaTerminalController::class, 'sync']);

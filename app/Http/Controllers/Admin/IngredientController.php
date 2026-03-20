@@ -22,8 +22,12 @@ class IngredientController extends Controller
     {
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255', 'unique:ingredients'],
+            'short_name' => ['nullable', 'string', 'max:50'],
             'unit' => ['string', 'max:100'],
             'cost_per_unit' => ['numeric', 'min:0'],
+            'quantity_per_package' => ['integer', 'min:1'],
+            'quantity_per_box' => ['nullable', 'integer', 'min:1'],
+            'cost_per_unit_in_box' => ['nullable', 'numeric', 'min:0'],
             'is_active' => ['boolean'],
         ]);
 
@@ -37,8 +41,12 @@ class IngredientController extends Controller
     {
         $validated = $request->validate([
             'name' => ['string', 'max:255', 'unique:ingredients,name,' . $ingredient->id],
+            'short_name' => ['nullable', 'string', 'max:50'],
             'unit' => ['string', 'max:100'],
             'cost_per_unit' => ['numeric', 'min:0'],
+            'quantity_per_package' => ['integer', 'min:1'],
+            'quantity_per_box' => ['nullable', 'integer', 'min:1'],
+            'cost_per_unit_in_box' => ['nullable', 'numeric', 'min:0'],
             'is_active' => ['boolean'],
         ]);
 

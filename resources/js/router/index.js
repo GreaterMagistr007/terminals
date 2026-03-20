@@ -149,6 +149,16 @@ const routes = [
                 component: () => import('@/pages/admin/Ingredients.vue'),
             },
             {
+                path: 'warehouses',
+                name: 'admin-warehouses',
+                component: () => import('@/pages/admin/Warehouses.vue'),
+            },
+            {
+                path: 'warehouses/:id/stocks',
+                name: 'admin-warehouse-stocks',
+                component: () => import('@/pages/admin/WarehouseStocks.vue'),
+            },
+            {
                 path: 'terminals',
                 name: 'admin-terminals',
                 component: () => import('@/pages/admin/Terminals.vue'),
