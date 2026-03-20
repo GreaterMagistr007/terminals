@@ -144,6 +144,11 @@ const routes = [
                 component: () => import('@/pages/admin/PointSettings.vue'),
             },
             {
+                path: 'ingredients',
+                name: 'admin-ingredients',
+                component: () => import('@/pages/admin/Ingredients.vue'),
+            },
+            {
                 path: 'terminals',
                 name: 'admin-terminals',
                 component: () => import('@/pages/admin/Terminals.vue'),

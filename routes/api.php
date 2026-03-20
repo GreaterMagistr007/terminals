@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\IngredientController;
 use App\Http\Controllers\Admin\PointController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\VendistaTerminalController;
@@ -40,6 +41,8 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         Route::get('/points', [PointController::class, 'index']);
         Route::get('/points/{terminal}', [PointController::class, 'show']);
         Route::put('/points/{terminal}', [PointController::class, 'update']);
+
+        Route::apiResource('ingredients', IngredientController::class)->except(['show']);
 
         Route::get('/vendista/terminals', [VendistaTerminalController::class, 'index']);
         Route::post('/vendista/terminals/sync', [VendistaTerminalController::class, 'sync']);
