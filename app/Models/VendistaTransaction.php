@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class VendistaTransaction extends Model
 {
+    public $timestamps = false;
+
     protected $fillable = [
         'trans_id',
         'term_id',

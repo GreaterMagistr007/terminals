@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Models\VendistaTerminal;
 use App\Models\VendistaTransaction;
 use Carbon\Carbon;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -342,9 +343,33 @@ class VendistaService
         $allItems = [];
         $page = 1;
         $perPage = 100;
+        $maxRetries = 3;
 
         do {
-            $data = $this->getTransactions($dateFrom, $dateTo, page: $page, perPage: $perPage);
+            $data = null;
+
+            for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
+                try {
+                    $data = $this->getTransactions($dateFrom, $dateTo, page: $page, perPage: $perPage);
+                    break;
+                } catch (ConnectionException $e) {
+                    Log::warning('Vendista API: таймаут, попытка {attempt}/{max}', [
+                        'attempt' => $attempt,
+                        'max' => $maxRetries,
+                        'page' => $page,
+                        'error' => $e->getMessage(),
+                    ]);
+                    if ($attempt === $maxRetries) {
+                        Log::error('Vendista API: все попытки исчерпаны', [
+                            'page' => $page,
+                            'dateFrom' => $dateFrom,
+                            'dateTo' => $dateTo,
+                        ]);
+                        return null;
+                    }
+                    sleep(2 * $attempt);
+                }
+            }
 
             if ($data === null || !($data['success'] ?? false)) {
                 Log::error('Vendista API: ошибка получения транзакций', [
@@ -368,44 +393,87 @@ class VendistaService
      * Синхронизация транзакций из Vendista API в локальную БД.
      * При первом запуске загружает за последние N дней.
      * При последующих — от последней сохранённой транзакции.
+     * Большие периоды разбиваются на месячные чанки для избежания таймаутов API.
      *
+     * @param callable|null $onChunk Колбэк для прогресса: fn(string $chunkFrom, string $chunkTo, int $fetched)
      * @return array{fetched: int, upserted: int}|null Отчёт или null при ошибке
      */
-    public function syncTransactions(?string $dateFrom = null, ?string $dateTo = null): ?array
+    public function syncTransactions(?string $dateFrom = null, ?string $dateTo = null, ?callable $onChunk = null): ?array
     {
         $this->isSyncing = true;
 
         try {
-            if ($dateTo === null) {
-                $dateTo = now()->format('Y-m-d\TH:i:s');
-            }
+            $end = $dateTo !== null ? Carbon::parse($dateTo) : now();
 
-            if ($dateFrom === null) {
+            if ($dateFrom !== null) {
+                $start = Carbon::parse($dateFrom);
+            } else {
                 $lastTime = VendistaTransaction::max('time');
-                $dateFrom = $lastTime
-                    ? Carbon::parse($lastTime)->format('Y-m-d\TH:i:s')
-                    : now()->subDays(self::DEFAULT_TRANSACTIONS_DAYS)->startOfDay()->format('Y-m-d\TH:i:s');
+                $start = $lastTime
+                    ? Carbon::parse($lastTime)
+                    : now()->subDays(self::DEFAULT_TRANSACTIONS_DAYS)->startOfDay();
             }
 
-            $remoteTransactions = $this->fetchAllTransactions($dateFrom, $dateTo);
+            $totalFetched = 0;
+            $totalUpserted = 0;
+
+            // Разбиваем на месячные чанки
+            $chunkStart = $start->copy();
+            while ($chunkStart->lt($end)) {
+                $chunkEnd = $chunkStart->copy()->addMonth()->min($end);
+
+                $chunkFromStr = $chunkStart->format('Y-m-d\TH:i:s');
+                $chunkToStr = $chunkEnd->format('Y-m-d\TH:i:s');
+
+                $remoteTransactions = $this->fetchAllTransactions($chunkFromStr, $chunkToStr);
+
+                if ($remoteTransactions === null) {
+                    Log::error('Vendista: ошибка синхронизации транзакций, прерывание', [
+                        'chunkFrom' => $chunkFromStr,
+                        'chunkTo' => $chunkToStr,
+                        'fetchedBefore' => $totalFetched,
+                    ]);
+                    // Возвращаем частичный результат, если что-то уже загружено
+                    if ($totalFetched > 0) {
+                        return ['fetched' => $totalFetched, 'upserted' => $totalUpserted];
+                    }
+                    return null;
+                }
+
+                $chunkFetched = count($remoteTransactions);
+
+                if ($chunkFetched > 0) {
+                    $upserted = $this->upsertTransactions($remoteTransactions);
+                    $totalFetched += $chunkFetched;
+                    $totalUpserted += $upserted;
+                }
+
+                if ($onChunk !== null) {
+                    $onChunk($chunkFromStr, $chunkToStr, $chunkFetched);
+                }
+
+                $chunkStart = $chunkEnd->copy();
+            }
         } finally {
             $this->isSyncing = false;
         }
 
-        if ($remoteTransactions === null) {
-            return null;
-        }
+        Log::info('Vendista: синхронизация транзакций', [
+            'dateFrom' => $start->format('Y-m-d\TH:i:s'),
+            'dateTo' => $end->format('Y-m-d\TH:i:s'),
+            'fetched' => $totalFetched,
+            'upserted' => $totalUpserted,
+        ]);
 
-        $fetched = count($remoteTransactions);
+        return ['fetched' => $totalFetched, 'upserted' => $totalUpserted];
+    }
 
-        if ($fetched === 0) {
-            Log::info('Vendista: синхронизация транзакций — новых нет', [
-                'dateFrom' => $dateFrom,
-                'dateTo' => $dateTo,
-            ]);
-            return ['fetched' => 0, 'upserted' => 0];
-        }
-
+    /**
+     * Upsert массива транзакций в БД.
+     * @return int Количество обработанных записей
+     */
+    private function upsertTransactions(array $remoteTransactions): int
+    {
         $rows = array_map(fn(array $item) => [
             'trans_id' => $item['id'],
             'term_id' => $item['term_id'],
@@ -417,8 +485,6 @@ class VendistaService
             'card_number' => $item['card_number'] ?? null,
             'reverse_id' => $item['reverse_id'] ?? 0,
             'reverse_time' => isset($item['reverse_time']) ? Carbon::parse($item['reverse_time']) : null,
-            'created_at' => now(),
-            'updated_at' => now(),
         ], $remoteTransactions);
 
         // SQLite: лимит 999 bind variables, 12 полей → max ~83 строки на чанк
@@ -429,19 +495,12 @@ class VendistaService
             VendistaTransaction::upsert(
                 $chunk,
                 ['trans_id'],
-                ['sum', 'result', 'status', 'response_code', 'card_number', 'reverse_id', 'reverse_time', 'updated_at']
+                ['sum', 'result', 'status', 'response_code', 'card_number', 'reverse_id', 'reverse_time']
             );
             $upserted += count($chunk);
         }
 
-        Log::info('Vendista: синхронизация транзакций', [
-            'dateFrom' => $dateFrom,
-            'dateTo' => $dateTo,
-            'fetched' => $fetched,
-            'upserted' => $upserted,
-        ]);
-
-        return compact('fetched', 'upserted');
+        return $upserted;
     }
 
     /** Автосинхронизация терминалов, если прошло больше суток */
@@ -462,9 +521,11 @@ class VendistaService
         $params['token'] = $token;
         $url = "{$this->baseUrl}{$path}";
 
+        $client = Http::timeout(60)->connectTimeout(15);
+
         return match (strtoupper($method)) {
-            'POST' => Http::post($url, $params),
-            default => Http::get($url, $params),
+            'POST' => $client->post($url, $params),
+            default => $client->get($url, $params),
         };
     }
 

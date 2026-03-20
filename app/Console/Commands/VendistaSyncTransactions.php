@@ -20,7 +20,9 @@ class VendistaSyncTransactions extends Command
 
         $this->info('Синхронизация транзакций из Vendista API...');
 
-        $report = $vendistaService->syncTransactions($dateFrom, $dateTo);
+        $report = $vendistaService->syncTransactions($dateFrom, $dateTo, function (string $from, string $to, int $fetched) {
+            $this->line("  {$from} — {$to}: {$fetched} транзакций");
+        });
 
         if ($report === null) {
             $this->error('Не удалось получить данные из Vendista API');

@@ -8,6 +8,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class TerminalSetting extends Model
 {
+    public $timestamps = false;
+
     protected $fillable = [
         'vendista_terminal_id',
         'hidden',

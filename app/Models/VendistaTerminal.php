@@ -9,6 +9,8 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class VendistaTerminal extends Model
 {
+    public $timestamps = false;
+
     protected $fillable = [
         'vendista_id',
         'comment',

@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Warehouse extends Model
 {
+    public $timestamps = false;
+
     protected $fillable = [
         'name',
         'is_default',
