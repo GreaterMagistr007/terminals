@@ -5,6 +5,8 @@ namespace App\Services;
 use App\Enums\UserRole;
 use App\Models\User;
 use App\Models\VendistaTerminal;
+use App\Models\VendistaTransaction;
+use Carbon\Carbon;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -15,6 +17,7 @@ class VendistaService
     private const CACHE_TOKEN_KEY = 'vendista_api_token';
     private const CACHE_TERMINALS_SYNC_KEY = 'vendista_terminals_last_sync';
     private const TERMINALS_SYNC_INTERVAL_HOURS = 24;
+    private const DEFAULT_TRANSACTIONS_DAYS = 30;
 
     private string $baseUrl;
     private string $login;
@@ -328,6 +331,117 @@ class VendistaService
         ]);
 
         return compact('added', 'updated', 'deleted');
+    }
+
+    /**
+     * Получение всех транзакций за период из Vendista API (с пагинацией).
+     * @return array|null Массив транзакций или null при ошибке
+     */
+    public function fetchAllTransactions(string $dateFrom, string $dateTo): ?array
+    {
+        $allItems = [];
+        $page = 1;
+        $perPage = 100;
+
+        do {
+            $data = $this->getTransactions($dateFrom, $dateTo, page: $page, perPage: $perPage);
+
+            if ($data === null || !($data['success'] ?? false)) {
+                Log::error('Vendista API: ошибка получения транзакций', [
+                    'page' => $page,
+                    'dateFrom' => $dateFrom,
+                    'dateTo' => $dateTo,
+                ]);
+                return null;
+            }
+
+            $items = $data['items'] ?? [];
+            $allItems = array_merge($allItems, $items);
+            $totalCount = $data['items_count'] ?? 0;
+            $page++;
+        } while (count($allItems) < $totalCount && count($items) > 0);
+
+        return $allItems;
+    }
+
+    /**
+     * Синхронизация транзакций из Vendista API в локальную БД.
+     * При первом запуске загружает за последние N дней.
+     * При последующих — от последней сохранённой транзакции.
+     *
+     * @return array{fetched: int, upserted: int}|null Отчёт или null при ошибке
+     */
+    public function syncTransactions(?string $dateFrom = null, ?string $dateTo = null): ?array
+    {
+        $this->isSyncing = true;
+
+        try {
+            if ($dateTo === null) {
+                $dateTo = now()->format('Y-m-d\TH:i:s');
+            }
+
+            if ($dateFrom === null) {
+                $lastTime = VendistaTransaction::max('time');
+                $dateFrom = $lastTime
+                    ? Carbon::parse($lastTime)->format('Y-m-d\TH:i:s')
+                    : now()->subDays(self::DEFAULT_TRANSACTIONS_DAYS)->startOfDay()->format('Y-m-d\TH:i:s');
+            }
+
+            $remoteTransactions = $this->fetchAllTransactions($dateFrom, $dateTo);
+        } finally {
+            $this->isSyncing = false;
+        }
+
+        if ($remoteTransactions === null) {
+            return null;
+        }
+
+        $fetched = count($remoteTransactions);
+
+        if ($fetched === 0) {
+            Log::info('Vendista: синхронизация транзакций — новых нет', [
+                'dateFrom' => $dateFrom,
+                'dateTo' => $dateTo,
+            ]);
+            return ['fetched' => 0, 'upserted' => 0];
+        }
+
+        $rows = array_map(fn(array $item) => [
+            'trans_id' => $item['id'],
+            'term_id' => $item['term_id'],
+            'sum' => $item['sum'] ?? 0,
+            'time' => Carbon::parse($item['time']),
+            'result' => $item['result'] ?? 0,
+            'status' => $item['status'] ?? 0,
+            'response_code' => $item['response_code'] ?? 0,
+            'card_number' => $item['card_number'] ?? null,
+            'reverse_id' => $item['reverse_id'] ?? 0,
+            'reverse_time' => isset($item['reverse_time']) ? Carbon::parse($item['reverse_time']) : null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ], $remoteTransactions);
+
+        // SQLite: лимит 999 bind variables, 12 полей → max ~83 строки на чанк
+        $chunkSize = config('database.default') === 'sqlite' ? 50 : 500;
+        $upserted = 0;
+
+        foreach (array_chunk($rows, $chunkSize) as $chunk) {
+            VendistaTransaction::upsert(
+                $chunk,
+                ['trans_id'],
+                ['sum', 'result', 'status', 'response_code', 'card_number', 'reverse_id', 'reverse_time', 'updated_at']
+            );
+            $upserted += count($chunk);
+        }
+
+        Log::info('Vendista: синхронизация транзакций', [
+            'dateFrom' => $dateFrom,
+            'dateTo' => $dateTo,
+            'fetched' => $fetched,
+            'upserted' => $upserted,
+        ]);
+
+        return compact('fetched', 'upserted');
     }
 
     /** Автосинхронизация терминалов, если прошло больше суток */

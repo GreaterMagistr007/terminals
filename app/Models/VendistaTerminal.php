@@ -59,4 +59,10 @@ class VendistaTerminal extends Model
     {
         return $this->hasOne(ServiceVisit::class, 'terminal_id')->latestOfMany('visited_at');
     }
+
+    /** Транзакции Vendista */
+    public function transactions(): HasMany
+    {
+        return $this->hasMany(VendistaTransaction::class, 'term_id', 'vendista_id');
+    }
 }

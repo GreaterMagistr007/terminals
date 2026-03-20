@@ -6,6 +6,7 @@ use App\Http\Controllers\Admin\StockMovementController;
 use App\Http\Controllers\Admin\PointController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\VendistaTerminalController;
+use App\Http\Controllers\Admin\VendistaTransactionController;
 use App\Http\Controllers\Admin\WarehouseController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Auth\TelegramBotCallbackController;
@@ -68,5 +69,6 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
 
         Route::get('/vendista/terminals', [VendistaTerminalController::class, 'index']);
         Route::post('/vendista/terminals/sync', [VendistaTerminalController::class, 'sync']);
+        Route::post('/vendista/transactions/sync', [VendistaTransactionController::class, 'sync']);
     });
 });
