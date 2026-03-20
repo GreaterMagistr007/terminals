@@ -1,16 +1,41 @@
 <template>
     <div class="px-4 py-4">
-        <!-- Заголовок с сортировкой -->
+        <!-- Заголовок с кнопкой настроек -->
         <div class="mb-4 flex items-center justify-between">
             <h1 class="text-lg font-bold text-gray-900 dark:text-white">Точки обслуживания</h1>
-            <select
-                v-model="sortMode"
-                @change="saveSortMode"
-                class="rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400"
+            <button @click="showSettings = !showSettings"
+                class="rounded-lg p-1.5 text-gray-400 active:bg-gray-100 dark:text-gray-500 dark:active:bg-gray-800"
             >
-                <option value="alphabet">По алфавиту</option>
-                <option value="service">По обслуживанию</option>
-            </select>
+                <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+            </button>
+        </div>
+
+        <!-- Карточка настроек -->
+        <div v-if="showSettings" class="mb-4 rounded-xl bg-white p-4 shadow-sm dark:bg-gray-900">
+            <p class="mb-3 text-sm font-semibold text-gray-900 dark:text-white">Настройки</p>
+            <div class="space-y-3">
+                <div class="flex items-center justify-between">
+                    <span class="text-sm text-gray-600 dark:text-gray-400">Сортировка</span>
+                    <select
+                        v-model="sortMode"
+                        @change="saveSettings"
+                        class="rounded-lg border border-gray-200 bg-gray-50 px-2 py-1 text-xs text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400"
+                    >
+                        <option value="service">По обслуживанию</option>
+                        <option value="alphabet">По алфавиту</option>
+                    </select>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="text-sm text-gray-600 dark:text-gray-400">Показать скрытые</span>
+                    <label class="relative inline-flex cursor-pointer items-center">
+                        <input type="checkbox" v-model="showHidden" @change="saveSettings" class="peer sr-only" />
+                        <div class="h-5 w-9 rounded-full bg-gray-200 after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all peer-checked:bg-blue-500 peer-checked:after:translate-x-full dark:bg-gray-700 dark:peer-checked:bg-blue-500"></div>
+                    </label>
+                </div>
+            </div>
         </div>
 
         <!-- Загрузка -->
@@ -99,19 +124,27 @@ import { ref, computed, onMounted } from 'vue';
 import apiClient from '@/api/client';
 
 const IRKUTSK_TZ = 'Asia/Irkutsk';
-
-const SORT_KEY = 'terminals_sort_mode';
+const SETTINGS_KEY = 'terminals_home_settings';
 
 const terminals = ref([]);
 const loading = ref(true);
 const expandedId = ref(null);
-const sortMode = ref(localStorage.getItem(SORT_KEY) || 'alphabet');
+const showSettings = ref(false);
 
-function saveSortMode() {
-    localStorage.setItem(SORT_KEY, sortMode.value);
+// Загрузка настроек из localStorage (default: service, showHidden=false)
+const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+const sortMode = ref(saved.sortMode || 'service');
+const showHidden = ref(saved.showHidden ?? false);
+
+function saveSettings() {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({
+        sortMode: sortMode.value,
+        showHidden: showHidden.value,
+    }));
 }
 
 const sortedTerminals = computed(() => {
+    // TODO: фильтрация скрытых терминалов (когда появится поле hidden)
     const list = [...terminals.value];
     if (sortMode.value === 'alphabet') {
         return list.sort((a, b) => (a.comment || '').localeCompare(b.comment || '', 'ru'));
@@ -160,7 +193,6 @@ function formatVisitDate(dateStr) {
     const date = new Date(dateStr);
     const now = new Date();
 
-    // Получаем дату в иркутском часовом поясе
     const irkNow = new Date(now.toLocaleString('en-US', { timeZone: IRKUTSK_TZ }));
     const irkDate = new Date(date.toLocaleString('en-US', { timeZone: IRKUTSK_TZ }));
 
@@ -168,36 +200,30 @@ function formatVisitDate(dateStr) {
     const diffMinutes = Math.floor(diffMs / 60000);
     const diffHours = Math.floor(diffMs / 3600000);
 
-    // Менее часа — минуты
     if (diffMinutes < 60) {
         if (diffMinutes < 1) return 'Только что';
         return `${diffMinutes} ${pluralize(diffMinutes, 'минута', 'минуты', 'минут')}`;
     }
 
-    // Начало сегодняшнего дня по Иркутску
     const todayStart = new Date(irkNow);
     todayStart.setHours(0, 0, 0, 0);
 
     const yesterdayStart = new Date(todayStart);
     yesterdayStart.setDate(yesterdayStart.getDate() - 1);
 
-    // Сегодня по Иркутску — часы
     if (irkDate >= todayStart) {
         return `${diffHours} ${pluralize(diffHours, 'час', 'часа', 'часов')}`;
     }
 
-    // Вчера по Иркутску
     if (irkDate >= yesterdayStart) {
         return 'Вчера';
     }
 
-    // Дни (до 7)
     const diffDays = Math.floor((todayStart - irkDate) / 86400000) + 1;
     if (diffDays <= 7) {
         return `${diffDays} ${pluralize(diffDays, 'день', 'дня', 'дней')}`;
     }
 
-    // Дата
     return date.toLocaleDateString('ru-RU', {
         day: 'numeric',
         month: 'long',
@@ -205,7 +231,6 @@ function formatVisitDate(dateStr) {
     });
 }
 
-/** Склонение русских числительных */
 function pluralize(n, one, few, many) {
     const abs = Math.abs(n) % 100;
     const lastDigit = abs % 10;
