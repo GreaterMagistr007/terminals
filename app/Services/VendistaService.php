@@ -139,17 +139,20 @@ class VendistaService
      */
     public function getTransactions(
         string $dateFrom,
-        string $dateTo,
+        ?string $dateTo = null,
         ?int $termId = null,
         int $page = 1,
         int $perPage = 50,
     ): ?array {
         $params = [
             'DateFrom' => $dateFrom,
-            'DateTo' => $dateTo,
             'PageNumber' => $page,
             'ItemsOnPage' => $perPage,
         ];
+
+        if ($dateTo !== null) {
+            $params['DateTo'] = $dateTo;
+        }
 
         if ($termId !== null) {
             $params['TermId'] = $termId;
@@ -338,7 +341,7 @@ class VendistaService
      * Получение всех транзакций за период из Vendista API (с пагинацией).
      * @return array|null Массив транзакций или null при ошибке
      */
-    public function fetchAllTransactions(string $dateFrom, string $dateTo): ?array
+    public function fetchAllTransactions(string $dateFrom, ?string $dateTo = null): ?array
     {
         $allItems = [];
         $page = 1;
@@ -501,6 +504,135 @@ class VendistaService
         }
 
         return $upserted;
+    }
+
+    /**
+     * Получение последних транзакций из Vendista API.
+     * Находит последнюю сохранённую транзакцию по MAX(trans_id),
+     * берёт начало дня её time и запрашивает всё с этого момента без ограничения DateTo.
+     * Новые транзакции вставляются, изменённые обновляются, неизменённые пропускаются.
+     *
+     * @return array{fetched: int, inserted: int, updated: int, skipped: int}|null
+     */
+    public function fetchLatestTransactions(): ?array
+    {
+        $this->isSyncing = true;
+
+        try {
+            // Последняя транзакция по MAX(trans_id)
+            $lastTransaction = VendistaTransaction::orderByDesc('trans_id')->first();
+
+            if ($lastTransaction) {
+                $dateFrom = Carbon::parse($lastTransaction->time)->startOfDay();
+            } else {
+                $dateFrom = now()->subDays(self::DEFAULT_TRANSACTIONS_DAYS)->startOfDay();
+            }
+
+            $dateFromStr = $dateFrom->format('Y-m-d\TH:i:s');
+
+            // Запрос к API без DateTo — получаем всё доступное
+            $remoteTransactions = $this->fetchAllTransactions($dateFromStr);
+
+            if ($remoteTransactions === null) {
+                return null;
+            }
+
+            $fetched = count($remoteTransactions);
+
+            if ($fetched === 0) {
+                return ['fetched' => 0, 'inserted' => 0, 'updated' => 0, 'skipped' => 0];
+            }
+
+            // Сортировка по trans_id ASC
+            usort($remoteTransactions, fn($a, $b) => $a['id'] <=> $b['id']);
+
+            // Загрузка существующих транзакций из БД для сравнения
+            $remoteTransIds = array_column($remoteTransactions, 'id');
+            $chunkSize = config('database.default') === 'sqlite' ? 50 : 500;
+
+            $existingByTransId = collect();
+            foreach (array_chunk($remoteTransIds, $chunkSize) as $idsChunk) {
+                $existingByTransId = $existingByTransId->merge(
+                    VendistaTransaction::whereIn('trans_id', $idsChunk)->get()->keyBy('trans_id')
+                );
+            }
+
+            $inserted = 0;
+            $updated = 0;
+            $skipped = 0;
+            $toInsert = [];
+
+            foreach ($remoteTransactions as $item) {
+                $row = $this->mapTransactionRow($item);
+                $existing = $existingByTransId->get($item['id']);
+
+                if ($existing) {
+                    if ($this->transactionChanged($existing, $row)) {
+                        $existing->update($row);
+                        $updated++;
+                    } else {
+                        $skipped++;
+                    }
+                } else {
+                    $toInsert[] = $row;
+                }
+            }
+
+            // Вставка новых пачками
+            if (!empty($toInsert)) {
+                foreach (array_chunk($toInsert, $chunkSize) as $chunk) {
+                    VendistaTransaction::insert($chunk);
+                }
+                $inserted = count($toInsert);
+            }
+
+            Log::info('Vendista: получение последних транзакций', [
+                'dateFrom' => $dateFromStr,
+                'fetched' => $fetched,
+                'inserted' => $inserted,
+                'updated' => $updated,
+                'skipped' => $skipped,
+            ]);
+
+            return compact('fetched', 'inserted', 'updated', 'skipped');
+        } finally {
+            $this->isSyncing = false;
+        }
+    }
+
+    /**
+     * Маппинг данных транзакции из API в формат БД.
+     */
+    private function mapTransactionRow(array $item): array
+    {
+        return [
+            'trans_id' => $item['id'],
+            'term_id' => $item['term_id'],
+            'sum' => $item['sum'] ?? 0,
+            'time' => Carbon::parse($item['time'])->format('Y-m-d H:i:s'),
+            'result' => $item['result'] ?? 0,
+            'status' => $item['status'] ?? 0,
+            'response_code' => $item['response_code'] ?? 0,
+            'card_number' => $item['card_number'] ?? null,
+            'reverse_id' => $item['reverse_id'] ?? 0,
+            'reverse_time' => isset($item['reverse_time']) ? Carbon::parse($item['reverse_time'])->format('Y-m-d H:i:s') : null,
+        ];
+    }
+
+    /**
+     * Проверка, изменились ли данные транзакции.
+     */
+    private function transactionChanged(VendistaTransaction $existing, array $new): bool
+    {
+        return $existing->term_id !== (int) $new['term_id']
+            || $existing->sum !== (int) $new['sum']
+            || $existing->result !== (int) $new['result']
+            || $existing->status !== (int) $new['status']
+            || $existing->response_code !== (int) $new['response_code']
+            || $existing->card_number !== $new['card_number']
+            || $existing->reverse_id !== (int) $new['reverse_id']
+            || $existing->time?->format('Y-m-d H:i:s') !== $new['time']
+            || $existing->reverse_time?->format('Y-m-d H:i:s') !== $new['reverse_time'];
     }
 
     /** Автосинхронизация терминалов, если прошло больше суток */
