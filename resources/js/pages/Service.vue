@@ -226,6 +226,24 @@
                 {{ currentStep === totalSteps ? 'Сохранить' : 'Далее' }}
             </button>
         </div>
+
+        <!-- Модальное окно подтверждения выхода -->
+        <div v-if="showExitModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showExitModal = false">
+            <div class="mx-4 w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl dark:bg-gray-800">
+                <h3 class="text-base font-bold text-gray-900 dark:text-white">Прекратить обслуживание?</h3>
+                <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Данные не сохранятся</p>
+                <div class="mt-5 flex gap-3">
+                    <button
+                        @click="showExitModal = false"
+                        class="flex-1 rounded-xl bg-gray-100 py-2.5 text-sm font-semibold text-gray-700 active:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:active:bg-gray-600"
+                    >Остаться</button>
+                    <button
+                        @click="router.push('/')"
+                        class="flex-1 rounded-xl bg-red-500 py-2.5 text-sm font-semibold text-white active:bg-red-600"
+                    >Выйти</button>
+                </div>
+            </div>
+        </div>
     </div>
 </template>
 
@@ -258,6 +276,7 @@ const comment = ref('');
 const isRecording = ref(false);
 const templates = ['Всё в норме', 'Требуется ремонт', 'Протечка воды', 'Нужна чистка', 'Аппарат отключён'];
 const photos = reactive({ inside: false, outside: false });
+const showExitModal = ref(false);
 
 async function fetchTerminal() {
     try {
@@ -272,7 +291,7 @@ function goBack() {
     if (currentStep.value > 1) {
         currentStep.value--;
     } else {
-        router.push('/');
+        showExitModal.value = true;
     }
 }
 
