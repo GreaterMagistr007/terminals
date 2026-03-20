@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class VendistaTerminal extends Model
 {
@@ -28,5 +29,11 @@ class VendistaTerminal extends Model
             'last_online_at' => 'datetime',
             'state' => 'integer',
         ];
+    }
+
+    /** Настройки точки */
+    public function settings(): HasOne
+    {
+        return $this->hasOne(TerminalSetting::class);
     }
 }

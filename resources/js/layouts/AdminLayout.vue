@@ -36,19 +36,6 @@
                     {{ item.label }}
                 </router-link>
 
-                <div class="my-3 border-t border-gray-200 dark:border-gray-800"></div>
-
-                <!-- Ссылка на операторскую часть -->
-                <router-link
-                    to="/"
-                    class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 active:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800 dark:active:bg-gray-700 transition-colors"
-                    @click="sidebarOpen = false"
-                >
-                    <svg class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
-                    </svg>
-                    На главную
-                </router-link>
             </nav>
 
             <!-- Пользователь -->
@@ -109,6 +96,12 @@ const sidebarOpen = ref(false);
 
 const navItems = [
     {
+        to: '/admin/points',
+        routeName: 'admin-points',
+        label: 'Точки',
+        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg>',
+    },
+    {
         to: '/admin/terminals',
         routeName: 'admin-terminals',
         label: 'Терминалы',
@@ -123,6 +116,10 @@ const navItems = [
 ];
 
 const currentPageTitle = computed(() => {
+    // Вложенные маршруты привязываем к родительскому пункту меню
+    if (route.name === 'admin-point-settings') {
+        return 'Настройки точки';
+    }
     const item = navItems.find(i => i.routeName === route.name);
     return item?.label || 'Администрирование';
 });
@@ -133,6 +130,10 @@ const initials = computed(() => {
 });
 
 function isActive(routeName) {
+    // Подсвечивать «Точки» и для вложенного маршрута настроек
+    if (routeName === 'admin-points' && route.name === 'admin-point-settings') {
+        return true;
+    }
     return route.name === routeName;
 }
 

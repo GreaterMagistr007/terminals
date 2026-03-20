@@ -6,6 +6,7 @@
     <meta name="theme-color" content="#1f2937">
     <meta name="description" content="Учёт обслуживания кофейных аппаратов">
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    <meta name="yandex-maps-api-key" content="{{ config('services.yandex_maps.api_key') }}">
     <link rel="manifest" href="/manifest.json">
     <link rel="icon" href="/favicon.ico">
     <link rel="apple-touch-icon" href="/icons/icon-192x192.png">

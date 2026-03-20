@@ -46,4 +46,8 @@ return [
         'base_url' => env('VENDISTA_API_URL', 'https://api.vendista.ru:99'),
     ],
 
+    'yandex_maps' => [
+        'api_key' => env('YANDEX_MAPS_API_KEY'),
+    ],
+
 ];

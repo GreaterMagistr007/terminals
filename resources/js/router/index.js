@@ -134,6 +134,16 @@ const routes = [
         meta: { auth: true, admin: true },
         children: [
             {
+                path: 'points',
+                name: 'admin-points',
+                component: () => import('@/pages/admin/Points.vue'),
+            },
+            {
+                path: 'points/:id',
+                name: 'admin-point-settings',
+                component: () => import('@/pages/admin/PointSettings.vue'),
+            },
+            {
                 path: 'terminals',
                 name: 'admin-terminals',
                 component: () => import('@/pages/admin/Terminals.vue'),
