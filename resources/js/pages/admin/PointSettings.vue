@@ -381,11 +381,7 @@ function initMap() {
         mapAddress.value = 'Определение адреса...';
 
         try {
-            const result = await window.ymaps.geocode(coords);
-            const firstGeoObject = result.geoObjects.get(0);
-            const address = firstGeoObject
-                ? firstGeoObject.getAddressLine()
-                : '';
+            const address = await reverseGeocode(coords);
 
             mapAddress.value = address;
             if (placemark) {
@@ -421,11 +417,7 @@ function addPlacemark(coords, address) {
             mapAddress.value = 'Определение адреса...';
 
             try {
-                const result = await window.ymaps.geocode(newCoords);
-                const firstGeoObject = result.geoObjects.get(0);
-                const address = firstGeoObject
-                    ? firstGeoObject.getAddressLine()
-                    : '';
+                const address = await reverseGeocode(newCoords);
 
                 mapAddress.value = address;
                 placemark.properties.set('balloonContentBody', formatBalloon(address, mapCoords.value));
@@ -436,6 +428,28 @@ function addPlacemark(coords, address) {
 
         ymapInstance.geoObjects.add(placemark);
     }
+}
+
+/** Обратное геокодирование — получение адреса по координатам с точностью до дома */
+async function reverseGeocode(coords) {
+    // Сначала пробуем найти конкретный дом
+    const houseResult = await window.ymaps.geocode(coords, { kind: 'house', results: 1 });
+    const houseObject = houseResult.geoObjects.get(0);
+
+    if (houseObject) {
+        // Проверяем, что дом находится в разумной близости (не дальше ~100м)
+        const houseCoords = houseObject.geometry.getCoordinates();
+        const distance = window.ymaps.coordSystem.geo.getDistance(coords, houseCoords);
+
+        if (distance < 100) {
+            return houseObject.getAddressLine();
+        }
+    }
+
+    // Если дом далеко — берём ближайший объект любого типа
+    const fallbackResult = await window.ymaps.geocode(coords, { results: 1 });
+    const fallbackObject = fallbackResult.geoObjects.get(0);
+    return fallbackObject ? fallbackObject.getAddressLine() : '';
 }
 
 /** Форматирование содержимого балуна */
