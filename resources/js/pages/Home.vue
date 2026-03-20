@@ -36,6 +36,7 @@
                         class="rounded-lg border border-gray-200 bg-gray-50 px-2 py-1 text-xs text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400"
                     >
                         <option value="service">По обслуживанию</option>
+                        <option value="sales">По стаканам</option>
                         <option value="alphabet">По алфавиту</option>
                     </select>
                 </div>
@@ -207,6 +208,10 @@ const sortedTerminals = computed(() => {
     }
     if (sortMode.value === 'alphabet') {
         return list.sort((a, b) => (a.comment || '').localeCompare(b.comment || '', 'ru'));
+    }
+    if (sortMode.value === 'sales') {
+        // По стаканам с последнего обслуживания: от большего к меньшему
+        return list.sort((a, b) => (b.sales_since_last_visit ?? 0) - (a.sales_since_last_visit ?? 0));
     }
     // По обслуживанию: от самого давнего (null/старая дата первым) к недавнему
     return list.sort((a, b) => {
