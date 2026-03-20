@@ -5,9 +5,9 @@
             <h1 class="text-lg font-bold text-gray-900 dark:text-white">Точки обслуживания</h1>
             <div class="flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500">
                 <span class="flex h-2 w-2 rounded-full bg-green-400"></span>
-                {{ onlineCount }}
-                <span class="ml-2 flex h-2 w-2 rounded-full bg-gray-300"></span>
-                {{ offlineCount }}
+                {{ onlineCount }} ок
+                <span class="ml-2 flex h-2 w-2 rounded-full bg-red-400"></span>
+                {{ urgentCount }} сроч.
             </div>
         </div>
 
@@ -28,16 +28,13 @@
                 <button @click="toggle(terminal.id)"
                     class="flex w-full items-center gap-3 px-4 py-3 text-left active:bg-gray-50 dark:active:bg-gray-800"
                 >
-                    <div class="h-10 w-1 shrink-0 rounded-full" :class="statusBarClass(terminal.state)"></div>
+                    <div class="h-10 w-1 shrink-0 rounded-full" :class="statusBarClass(terminal)"></div>
                     <div class="flex-1 min-w-0">
                         <p class="font-medium text-gray-900 truncate dark:text-white">{{ terminal.comment || 'Без описания' }}</p>
-                        <p v-if="terminal.tid" class="text-xs text-gray-400 dark:text-gray-500">TID: {{ terminal.tid }}</p>
+                        <p class="text-xs text-gray-400 dark:text-gray-500">продаж с последнего обслуживания: 0</p>
                     </div>
                     <div class="shrink-0 flex items-center gap-2">
-                        <span
-                            class="rounded px-1.5 py-0.5 text-xs font-medium"
-                            :class="stateBadgeClass(terminal.state)"
-                        >{{ stateLabel(terminal.state) }}</span>
+                        <span class="text-xs text-gray-400 dark:text-gray-500">{{ formatVisitDate(terminal.last_online_at) }}</span>
                         <svg class="h-4 w-4 text-gray-300 transition-transform dark:text-gray-600"
                             :class="expandedId === terminal.id ? 'rotate-180' : ''"
                             fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"
@@ -51,15 +48,27 @@
                 <div v-if="expandedId === terminal.id"
                     class="border-t border-gray-100 px-4 pb-4 pt-3 dark:border-gray-800"
                 >
+                    <!-- Вода и последний визит -->
                     <div class="grid grid-cols-2 gap-3 mb-4">
                         <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-800">
-                            <p class="text-xs text-gray-400 dark:text-gray-500">Последний онлайн</p>
-                            <p class="mt-1 text-sm font-semibold text-gray-900 dark:text-white">{{ formatDate(terminal.last_online_at) }}</p>
+                            <p class="text-xs text-gray-400 dark:text-gray-500">Вода</p>
+                            <div class="flex items-center gap-2 mt-1">
+                                <div class="h-1.5 flex-1 rounded-full bg-gray-200 dark:bg-gray-700">
+                                    <div class="h-1.5 rounded-full bg-gray-300" style="width: 0%"></div>
+                                </div>
+                                <span class="text-sm font-semibold text-gray-400">—</span>
+                            </div>
                         </div>
                         <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-800">
-                            <p class="text-xs text-gray-400 dark:text-gray-500">Состояние</p>
-                            <p class="mt-1 text-sm font-semibold" :class="stateTextClass(terminal.state)">{{ stateLabel(terminal.state) }}</p>
+                            <p class="text-xs text-gray-400 dark:text-gray-500">Последний визит</p>
+                            <p class="mt-1 text-sm font-semibold text-gray-900 dark:text-white">{{ formatVisitDate(terminal.last_online_at) }}</p>
                         </div>
+                    </div>
+
+                    <!-- Ингредиенты -->
+                    <div class="mb-4">
+                        <p class="text-xs text-gray-400 dark:text-gray-500 mb-2">Ингредиенты</p>
+                        <p class="text-xs text-gray-300 dark:text-gray-600">Данные появятся после первого обслуживания</p>
                     </div>
 
                     <!-- Кнопки действий -->
@@ -87,6 +96,8 @@
 import { ref, computed, onMounted } from 'vue';
 import apiClient from '@/api/client';
 
+const IRKUTSK_TZ = 'Asia/Irkutsk';
+
 const terminals = ref([]);
 const loading = ref(true);
 const expandedId = ref(null);
@@ -105,56 +116,84 @@ async function fetchTerminals() {
 }
 
 const onlineCount = computed(() => terminals.value.filter(t => t.state === 1).length);
-const offlineCount = computed(() => terminals.value.filter(t => t.state !== 1).length);
+const urgentCount = computed(() => terminals.value.filter(t => t.state !== 1).length);
 
-function statusBarClass(state) {
+function statusBarClass(terminal) {
+    // TODO: заменить на логику по данным обслуживания
     return {
         1: 'bg-green-500',
         2: 'bg-red-500',
         3: 'bg-gray-400',
-    }[state] || 'bg-gray-300';
+    }[terminal.state] || 'bg-gray-300';
 }
 
-function stateBadgeClass(state) {
-    return {
-        1: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
-        2: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
-        3: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400',
-    }[state] || 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400';
-}
-
-function stateTextClass(state) {
-    return {
-        1: 'text-green-600 dark:text-green-400',
-        2: 'text-red-600 dark:text-red-400',
-        3: 'text-gray-500 dark:text-gray-400',
-    }[state] || 'text-gray-500 dark:text-gray-400';
-}
-
-function stateLabel(state) {
-    return {
-        0: 'Неизвестно',
-        1: 'Онлайн',
-        2: 'Офлайн',
-        3: 'Нет связи',
-        4: 'Заблокирован',
-        5: 'Отключён',
-    }[state] || 'Неизвестно';
-}
-
-function formatDate(dateStr) {
+/**
+ * Форматирование даты по иркутскому времени.
+ * < 1 часа: "N минут"
+ * Сегодня (по Иркутску): "N часов"
+ * Вчера (по Иркутску): "Вчера"
+ * 2-7 дней: "N дней"
+ * > 7 дней: "28 января"
+ */
+function formatVisitDate(dateStr) {
     if (!dateStr) return '—';
+
     const date = new Date(dateStr);
     const now = new Date();
-    const diffMs = now - date;
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
 
-    if (diffHours < 1) return 'Только что';
-    if (diffHours < 24) return `${diffHours} ч. назад`;
-    if (diffDays === 1) return 'Вчера';
-    if (diffDays < 7) return `${diffDays} дн. назад`;
-    return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+    // Получаем дату в иркутском часовом поясе
+    const irkNow = new Date(now.toLocaleString('en-US', { timeZone: IRKUTSK_TZ }));
+    const irkDate = new Date(date.toLocaleString('en-US', { timeZone: IRKUTSK_TZ }));
+
+    const diffMs = now - date;
+    const diffMinutes = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+
+    // Менее часа — минуты
+    if (diffMinutes < 60) {
+        if (diffMinutes < 1) return 'Только что';
+        return `${diffMinutes} ${pluralize(diffMinutes, 'минута', 'минуты', 'минут')}`;
+    }
+
+    // Начало сегодняшнего дня по Иркутску
+    const todayStart = new Date(irkNow);
+    todayStart.setHours(0, 0, 0, 0);
+
+    const yesterdayStart = new Date(todayStart);
+    yesterdayStart.setDate(yesterdayStart.getDate() - 1);
+
+    // Сегодня по Иркутску — часы
+    if (irkDate >= todayStart) {
+        return `${diffHours} ${pluralize(diffHours, 'час', 'часа', 'часов')}`;
+    }
+
+    // Вчера по Иркутску
+    if (irkDate >= yesterdayStart) {
+        return 'Вчера';
+    }
+
+    // Дни (до 7)
+    const diffDays = Math.floor((todayStart - irkDate) / 86400000) + 1;
+    if (diffDays <= 7) {
+        return `${diffDays} ${pluralize(diffDays, 'день', 'дня', 'дней')}`;
+    }
+
+    // Дата
+    return date.toLocaleDateString('ru-RU', {
+        day: 'numeric',
+        month: 'long',
+        timeZone: IRKUTSK_TZ,
+    });
+}
+
+/** Склонение русских числительных */
+function pluralize(n, one, few, many) {
+    const abs = Math.abs(n) % 100;
+    const lastDigit = abs % 10;
+    if (abs > 10 && abs < 20) return many;
+    if (lastDigit === 1) return one;
+    if (lastDigit >= 2 && lastDigit <= 4) return few;
+    return many;
 }
 
 onMounted(fetchTerminals);
