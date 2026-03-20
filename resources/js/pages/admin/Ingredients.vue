@@ -210,16 +210,64 @@
                             </p>
                         </div>
                         <div class="flex items-center gap-2">
-                            <!-- Оприходование -->
-                            <button
-                                @click="openReceipt(ingredient)"
-                                class="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-green-500 active:bg-gray-200 dark:hover:bg-gray-700 dark:hover:text-green-400 transition-colors"
-                                title="Оприходовать"
-                            >
-                                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                                </svg>
-                            </button>
+                            <!-- Выпадающее меню действий -->
+                            <div class="relative">
+                                <button
+                                    @click="toggleMenu(ingredient.id)"
+                                    class="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 active:bg-gray-200 dark:hover:bg-gray-700 dark:hover:text-gray-300 transition-colors"
+                                    title="Действия"
+                                >
+                                    <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+                                        <circle cx="12" cy="5" r="1.5" />
+                                        <circle cx="12" cy="12" r="1.5" />
+                                        <circle cx="12" cy="19" r="1.5" />
+                                    </svg>
+                                </button>
+
+                                <!-- Выпадающее меню -->
+                                <div
+                                    v-if="openMenuId === ingredient.id"
+                                    class="absolute right-0 z-20 mt-1 w-48 rounded-lg bg-white py-1 shadow-lg ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10"
+                                >
+                                    <button
+                                        @click="openPurchase(ingredient)"
+                                        class="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-700"
+                                    >
+                                        <svg class="h-4 w-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                                        </svg>
+                                        Оприходовать
+                                    </button>
+                                    <button
+                                        @click="openTransfer(ingredient)"
+                                        class="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-700"
+                                    >
+                                        <svg class="h-4 w-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
+                                        </svg>
+                                        Переместить
+                                    </button>
+                                    <button
+                                        @click="openWriteOff(ingredient)"
+                                        class="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-700"
+                                    >
+                                        <svg class="h-4 w-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 12h-15" />
+                                        </svg>
+                                        Списать
+                                    </button>
+                                    <div class="my-1 border-t border-gray-100 dark:border-gray-700"></div>
+                                    <button
+                                        @click="goToHistory(ingredient)"
+                                        class="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-700"
+                                    >
+                                        <svg class="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        История
+                                    </button>
+                                </div>
+                            </div>
 
                             <!-- Редактирование -->
                             <button
@@ -292,19 +340,19 @@
                 </div>
             </div>
 
-            <!-- Модалка оприходования -->
-            <div v-if="receiptIngredient" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="closeReceipt">
+            <!-- Модалка покупки / оприходования -->
+            <div v-if="purchaseIngredient" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="closePurchase">
                 <div class="mx-4 w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-gray-800">
                     <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
-                        Оприходование: {{ receiptIngredient.name }}
+                        Оприходование: {{ purchaseIngredient.name }}
                     </h3>
 
-                    <form @submit.prevent="submitReceipt" class="mt-4 space-y-4">
+                    <form @submit.prevent="submitPurchase" class="mt-4 space-y-4">
                         <!-- Склад -->
                         <div>
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Склад</label>
                             <select
-                                v-model.number="receiptForm.warehouse_id"
+                                v-model.number="purchaseForm.warehouse_id"
                                 required
                                 class="mt-1 block w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                             >
@@ -319,7 +367,7 @@
                                 <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
                                     <input
                                         type="radio"
-                                        v-model="receiptForm.source"
+                                        v-model="purchaseForm.source"
                                         value="unit"
                                         class="text-blue-500"
                                     />
@@ -327,15 +375,15 @@
                                 </label>
                                 <label
                                     class="flex items-center gap-2 text-sm"
-                                    :class="receiptIngredient.quantity_per_box
+                                    :class="purchaseIngredient.quantity_per_box
                                         ? 'text-gray-700 dark:text-gray-300'
                                         : 'text-gray-300 dark:text-gray-600'"
                                 >
                                     <input
                                         type="radio"
-                                        v-model="receiptForm.source"
+                                        v-model="purchaseForm.source"
                                         value="box"
-                                        :disabled="!receiptIngredient.quantity_per_box"
+                                        :disabled="!purchaseIngredient.quantity_per_box"
                                         class="text-blue-500"
                                     />
                                     Коробками
@@ -346,10 +394,10 @@
                         <!-- Количество -->
                         <div>
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                Количество, {{ receiptForm.source === 'box' ? 'коробок' : receiptIngredient.unit }}
+                                Количество, {{ purchaseForm.source === 'box' ? 'коробок' : purchaseIngredient.unit }}
                             </label>
                             <input
-                                v-model.number="receiptForm.quantity"
+                                v-model.number="purchaseForm.quantity"
                                 type="number"
                                 min="1"
                                 step="1"
@@ -362,7 +410,7 @@
                         <div>
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Цена за единицу</label>
                             <input
-                                v-model.number="receiptForm.cost_per_unit"
+                                v-model.number="purchaseForm.cost_per_unit"
                                 type="number"
                                 min="0"
                                 step="0.01"
@@ -373,15 +421,15 @@
 
                         <!-- Итого -->
                         <div class="rounded bg-gray-50 p-3 text-sm text-gray-700 dark:bg-gray-700/50 dark:text-gray-300">
-                            <p v-if="receiptForm.source === 'box' && receiptIngredient.quantity_per_box">
-                                {{ receiptForm.quantity || 0 }} коробок
-                                &times; {{ receiptIngredient.quantity_per_box }} шт
-                                = {{ receiptTotalUnits }} шт,
-                                сумма: {{ formatCost(receiptTotalCost) }}
+                            <p v-if="purchaseForm.source === 'box' && purchaseIngredient.quantity_per_box">
+                                {{ purchaseForm.quantity || 0 }} коробок
+                                &times; {{ purchaseIngredient.quantity_per_box }} шт
+                                = {{ purchaseTotalUnits }} шт,
+                                сумма: {{ formatCost(purchaseTotalCost) }}
                             </p>
                             <p v-else>
-                                {{ receiptForm.quantity || 0 }} {{ receiptIngredient.unit }},
-                                сумма: {{ formatCost(receiptTotalCost) }}
+                                {{ purchaseForm.quantity || 0 }} {{ purchaseIngredient.unit }},
+                                сумма: {{ formatCost(purchaseTotalCost) }}
                             </p>
                         </div>
 
@@ -389,7 +437,7 @@
                         <div>
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Комментарий</label>
                             <textarea
-                                v-model="receiptForm.note"
+                                v-model="purchaseForm.note"
                                 rows="2"
                                 maxlength="500"
                                 class="mt-1 block w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
@@ -399,41 +447,212 @@
                         <div class="flex gap-2 justify-end">
                             <button
                                 type="button"
-                                @click="closeReceipt"
+                                @click="closePurchase"
                                 class="rounded bg-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-400 dark:bg-gray-600 dark:text-gray-200 transition-colors"
                             >
                                 Отмена
                             </button>
                             <button
                                 type="submit"
-                                :disabled="submittingReceipt"
+                                :disabled="submitting"
                                 class="rounded bg-green-500 px-4 py-2 text-white hover:bg-green-600 disabled:opacity-50 transition-colors"
                             >
-                                {{ submittingReceipt ? 'Оприходование...' : 'Оприходовать' }}
+                                {{ submitting ? 'Оприходование...' : 'Оприходовать' }}
                             </button>
                         </div>
 
-                        <div v-if="receiptError" class="rounded bg-red-100 p-3 text-sm text-red-800 dark:bg-red-900/40 dark:text-red-300">
-                            {{ receiptError }}
+                        <div v-if="modalError" class="rounded bg-red-100 p-3 text-sm text-red-800 dark:bg-red-900/40 dark:text-red-300">
+                            {{ modalError }}
                         </div>
                     </form>
                 </div>
             </div>
 
-            <!-- Уведомление об успешном оприходовании -->
+            <!-- Модалка перемещения -->
+            <div v-if="transferIngredient" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="closeTransfer">
+                <div class="mx-4 w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-gray-800">
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                        Перемещение: {{ transferIngredient.name }}
+                    </h3>
+
+                    <form @submit.prevent="submitTransfer" class="mt-4 space-y-4">
+                        <!-- Откуда -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Откуда</label>
+                            <select
+                                v-model.number="transferForm.from_warehouse_id"
+                                required
+                                class="mt-1 block w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                            >
+                                <option v-for="w in warehouses" :key="w.id" :value="w.id">{{ w.name }}</option>
+                            </select>
+                        </div>
+
+                        <!-- Куда -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Куда</label>
+                            <select
+                                v-model.number="transferForm.to_warehouse_id"
+                                required
+                                class="mt-1 block w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                            >
+                                <option
+                                    v-for="w in transferTargetWarehouses"
+                                    :key="w.id"
+                                    :value="w.id"
+                                >{{ w.name }}</option>
+                            </select>
+                        </div>
+
+                        <!-- Количество -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Количество, {{ transferIngredient.unit }}
+                            </label>
+                            <input
+                                v-model.number="transferForm.quantity"
+                                type="number"
+                                min="1"
+                                step="1"
+                                required
+                                class="mt-1 block w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                            />
+                        </div>
+
+                        <!-- Комментарий -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Комментарий</label>
+                            <textarea
+                                v-model="transferForm.note"
+                                rows="2"
+                                maxlength="500"
+                                class="mt-1 block w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                            ></textarea>
+                        </div>
+
+                        <div class="flex gap-2 justify-end">
+                            <button
+                                type="button"
+                                @click="closeTransfer"
+                                class="rounded bg-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-400 dark:bg-gray-600 dark:text-gray-200 transition-colors"
+                            >
+                                Отмена
+                            </button>
+                            <button
+                                type="submit"
+                                :disabled="submitting"
+                                class="rounded bg-blue-500 px-4 py-2 text-white hover:bg-blue-600 disabled:opacity-50 transition-colors"
+                            >
+                                {{ submitting ? 'Перемещение...' : 'Переместить' }}
+                            </button>
+                        </div>
+
+                        <div v-if="modalError" class="rounded bg-red-100 p-3 text-sm text-red-800 dark:bg-red-900/40 dark:text-red-300">
+                            {{ modalError }}
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Модалка списания -->
+            <div v-if="writeOffIngredient" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="closeWriteOff">
+                <div class="mx-4 w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-gray-800">
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                        Списание: {{ writeOffIngredient.name }}
+                    </h3>
+
+                    <form @submit.prevent="submitWriteOff" class="mt-4 space-y-4">
+                        <!-- Склад -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Склад</label>
+                            <select
+                                v-model.number="writeOffForm.warehouse_id"
+                                required
+                                class="mt-1 block w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                            >
+                                <option v-for="w in warehouses" :key="w.id" :value="w.id">{{ w.name }}</option>
+                            </select>
+                        </div>
+
+                        <!-- Количество -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Количество, {{ writeOffIngredient.unit }}
+                            </label>
+                            <input
+                                v-model.number="writeOffForm.quantity"
+                                type="number"
+                                min="1"
+                                step="1"
+                                required
+                                class="mt-1 block w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                            />
+                        </div>
+
+                        <!-- Причина -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Причина</label>
+                            <input
+                                v-model="writeOffForm.reason"
+                                type="text"
+                                required
+                                maxlength="255"
+                                class="mt-1 block w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                            />
+                        </div>
+
+                        <!-- Комментарий -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Комментарий</label>
+                            <textarea
+                                v-model="writeOffForm.note"
+                                rows="2"
+                                maxlength="500"
+                                class="mt-1 block w-full rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                            ></textarea>
+                        </div>
+
+                        <div class="flex gap-2 justify-end">
+                            <button
+                                type="button"
+                                @click="closeWriteOff"
+                                class="rounded bg-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-400 dark:bg-gray-600 dark:text-gray-200 transition-colors"
+                            >
+                                Отмена
+                            </button>
+                            <button
+                                type="submit"
+                                :disabled="submitting"
+                                class="rounded bg-red-500 px-4 py-2 text-white hover:bg-red-600 disabled:opacity-50 transition-colors"
+                            >
+                                {{ submitting ? 'Списание...' : 'Списать' }}
+                            </button>
+                        </div>
+
+                        <div v-if="modalError" class="rounded bg-red-100 p-3 text-sm text-red-800 dark:bg-red-900/40 dark:text-red-300">
+                            {{ modalError }}
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Уведомление об успешном действии -->
             <div
-                v-if="receiptSuccess"
+                v-if="successMessage"
                 class="fixed bottom-4 left-1/2 z-50 -translate-x-1/2 rounded-lg bg-green-500 px-6 py-3 text-white shadow-lg"
             >
-                {{ receiptSuccess }}
+                {{ successMessage }}
             </div>
         </div>
     </div>
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue';
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
+import { useRouter } from 'vue-router';
 import apiClient from '@/api/client';
+
+const router = useRouter();
 
 const unitOptions = ['упаковка', 'штука', 'килограмм'];
 const ingredients = ref([]);
@@ -458,41 +677,76 @@ const newIngredient = ref({
     cost_per_unit_in_box: null,
 });
 
-// Оприходование
-const receiptIngredient = ref(null);
+// Общие переменные для модалок действий
 const warehouses = ref([]);
-const receiptForm = ref({
+const submitting = ref(false);
+const modalError = ref('');
+const successMessage = ref('');
+let successTimer = null;
+
+// Выпадающее меню
+const openMenuId = ref(null);
+
+// Покупка / оприходование
+const purchaseIngredient = ref(null);
+const purchaseForm = ref({
     warehouse_id: null,
     source: 'unit',
     quantity: 1,
     cost_per_unit: 0,
     note: '',
 });
-const submittingReceipt = ref(false);
-const receiptError = ref('');
-const receiptSuccess = ref('');
-let receiptSuccessTimer = null;
 
-/** Количество единиц при оприходовании */
-const receiptTotalUnits = computed(() => {
-    if (receiptForm.value.source === 'box' && receiptIngredient.value?.quantity_per_box) {
-        return (receiptForm.value.quantity || 0) * receiptIngredient.value.quantity_per_box;
+// Перемещение
+const transferIngredient = ref(null);
+const transferForm = ref({
+    from_warehouse_id: null,
+    to_warehouse_id: null,
+    quantity: 1,
+    note: '',
+});
+
+// Списание
+const writeOffIngredient = ref(null);
+const writeOffForm = ref({
+    warehouse_id: null,
+    quantity: 1,
+    reason: '',
+    note: '',
+});
+
+/** Количество единиц при покупке */
+const purchaseTotalUnits = computed(() => {
+    if (purchaseForm.value.source === 'box' && purchaseIngredient.value?.quantity_per_box) {
+        return (purchaseForm.value.quantity || 0) * purchaseIngredient.value.quantity_per_box;
     }
-    return receiptForm.value.quantity || 0;
+    return purchaseForm.value.quantity || 0;
 });
 
-/** Общая стоимость оприходования */
-const receiptTotalCost = computed(() => {
-    return receiptTotalUnits.value * (receiptForm.value.cost_per_unit || 0);
+/** Общая стоимость покупки */
+const purchaseTotalCost = computed(() => {
+    return purchaseTotalUnits.value * (purchaseForm.value.cost_per_unit || 0);
 });
 
-/** Предзаполнение цены при смене режима */
-watch(() => receiptForm.value.source, (source) => {
-    if (!receiptIngredient.value) return;
-    if (source === 'box' && receiptIngredient.value.cost_per_unit_in_box) {
-        receiptForm.value.cost_per_unit = receiptIngredient.value.cost_per_unit_in_box;
+/** Список складов-получателей (без склада-источника) для перемещения */
+const transferTargetWarehouses = computed(() => {
+    return warehouses.value.filter(w => w.id !== transferForm.value.from_warehouse_id);
+});
+
+/** Предзаполнение цены при смене режима покупки */
+watch(() => purchaseForm.value.source, (source) => {
+    if (!purchaseIngredient.value) return;
+    if (source === 'box' && purchaseIngredient.value.cost_per_unit_in_box) {
+        purchaseForm.value.cost_per_unit = purchaseIngredient.value.cost_per_unit_in_box;
     } else {
-        receiptForm.value.cost_per_unit = receiptIngredient.value.cost_per_unit || 0;
+        purchaseForm.value.cost_per_unit = purchaseIngredient.value.cost_per_unit || 0;
+    }
+});
+
+/** Сброс склада-получателя при смене склада-источника */
+watch(() => transferForm.value.from_warehouse_id, () => {
+    if (transferForm.value.to_warehouse_id === transferForm.value.from_warehouse_id) {
+        transferForm.value.to_warehouse_id = null;
     }
 });
 
@@ -612,11 +866,48 @@ async function deleteIngredient() {
     }
 }
 
-/** Открытие модалки оприходования */
-async function openReceipt(ingredient) {
-    receiptIngredient.value = ingredient;
-    receiptError.value = '';
-    receiptForm.value = {
+// --- Выпадающее меню ---
+
+/** Переключение видимости меню */
+function toggleMenu(ingredientId) {
+    openMenuId.value = openMenuId.value === ingredientId ? null : ingredientId;
+}
+
+/** Закрытие меню при клике вне */
+function handleClickOutside(event) {
+    if (openMenuId.value !== null && !event.target.closest('.relative')) {
+        openMenuId.value = null;
+    }
+}
+
+// --- Загрузка складов (общая для всех модалок) ---
+
+/** Загрузка списка складов и установка склада по умолчанию */
+async function loadWarehouses() {
+    try {
+        const { data } = await apiClient.get('/admin/warehouses');
+        warehouses.value = data.warehouses;
+    } catch {
+        modalError.value = 'Не удалось загрузить список складов';
+    }
+}
+
+/** Определение склада по умолчанию */
+function getDefaultWarehouseId() {
+    const defaultWarehouse = warehouses.value.find(w => w.is_default);
+    if (defaultWarehouse) return defaultWarehouse.id;
+    if (warehouses.value.length) return warehouses.value[0].id;
+    return null;
+}
+
+// --- Покупка / оприходование ---
+
+/** Открытие модалки покупки */
+async function openPurchase(ingredient) {
+    openMenuId.value = null;
+    purchaseIngredient.value = ingredient;
+    modalError.value = '';
+    purchaseForm.value = {
         warehouse_id: null,
         source: 'unit',
         quantity: 1,
@@ -624,66 +915,162 @@ async function openReceipt(ingredient) {
         note: '',
     };
 
-    // Загрузка списка складов
-    try {
-        const { data } = await apiClient.get('/admin/warehouses');
-        warehouses.value = data.warehouses;
-        // Предвыбор склада по умолчанию
-        const defaultWarehouse = warehouses.value.find(w => w.is_default);
-        if (defaultWarehouse) {
-            receiptForm.value.warehouse_id = defaultWarehouse.id;
-        } else if (warehouses.value.length) {
-            receiptForm.value.warehouse_id = warehouses.value[0].id;
-        }
-    } catch {
-        receiptError.value = 'Не удалось загрузить список складов';
-    }
+    await loadWarehouses();
+    purchaseForm.value.warehouse_id = getDefaultWarehouseId();
 }
 
-/** Закрытие модалки оприходования */
-function closeReceipt() {
-    receiptIngredient.value = null;
-    receiptError.value = '';
+/** Закрытие модалки покупки */
+function closePurchase() {
+    purchaseIngredient.value = null;
+    modalError.value = '';
 }
 
-/** Отправка оприходования */
-async function submitReceipt() {
-    submittingReceipt.value = true;
-    receiptError.value = '';
+/** Отправка покупки */
+async function submitPurchase() {
+    submitting.value = true;
+    modalError.value = '';
     try {
-        await apiClient.post(`/admin/ingredients/${receiptIngredient.value.id}/receipt`, {
-            warehouse_id: receiptForm.value.warehouse_id,
-            quantity: receiptForm.value.quantity,
-            cost_per_unit: receiptForm.value.cost_per_unit,
-            source: receiptForm.value.source,
-            note: receiptForm.value.note || null,
+        await apiClient.post(`/admin/ingredients/${purchaseIngredient.value.id}/purchase`, {
+            warehouse_id: purchaseForm.value.warehouse_id,
+            quantity: purchaseForm.value.quantity,
+            cost_per_unit: purchaseForm.value.cost_per_unit,
+            source: purchaseForm.value.source,
+            note: purchaseForm.value.note || null,
         });
 
         // Обновляем цену ингредиента в списке
-        const ingredient = receiptIngredient.value;
-        if (receiptForm.value.source === 'unit') {
-            ingredient.cost_per_unit = receiptForm.value.cost_per_unit;
+        const ingredient = purchaseIngredient.value;
+        if (purchaseForm.value.source === 'unit') {
+            ingredient.cost_per_unit = purchaseForm.value.cost_per_unit;
         } else {
-            ingredient.cost_per_unit_in_box = receiptForm.value.cost_per_unit;
+            ingredient.cost_per_unit_in_box = purchaseForm.value.cost_per_unit;
         }
 
-        closeReceipt();
-        showReceiptSuccess('Ингредиент успешно оприходован');
+        closePurchase();
+        showSuccess('Ингредиент успешно оприходован');
     } catch (error) {
-        receiptError.value = error.response?.data?.message || 'Не удалось оприходовать ингредиент';
+        modalError.value = error.response?.data?.message || 'Не удалось оприходовать ингредиент';
     } finally {
-        submittingReceipt.value = false;
+        submitting.value = false;
     }
 }
 
-/** Показать уведомление об успешном оприходовании */
-function showReceiptSuccess(message) {
-    receiptSuccess.value = message;
-    if (receiptSuccessTimer) clearTimeout(receiptSuccessTimer);
-    receiptSuccessTimer = setTimeout(() => {
-        receiptSuccess.value = '';
+// --- Перемещение ---
+
+/** Открытие модалки перемещения */
+async function openTransfer(ingredient) {
+    openMenuId.value = null;
+    transferIngredient.value = ingredient;
+    modalError.value = '';
+    transferForm.value = {
+        from_warehouse_id: null,
+        to_warehouse_id: null,
+        quantity: 1,
+        note: '',
+    };
+
+    await loadWarehouses();
+    transferForm.value.from_warehouse_id = getDefaultWarehouseId();
+}
+
+/** Закрытие модалки перемещения */
+function closeTransfer() {
+    transferIngredient.value = null;
+    modalError.value = '';
+}
+
+/** Отправка перемещения */
+async function submitTransfer() {
+    submitting.value = true;
+    modalError.value = '';
+    try {
+        await apiClient.post(`/admin/ingredients/${transferIngredient.value.id}/transfer`, {
+            from_warehouse_id: transferForm.value.from_warehouse_id,
+            to_warehouse_id: transferForm.value.to_warehouse_id,
+            quantity: transferForm.value.quantity,
+            note: transferForm.value.note || null,
+        });
+
+        closeTransfer();
+        showSuccess('Ингредиент успешно перемещён');
+    } catch (error) {
+        modalError.value = error.response?.data?.message || 'Не удалось переместить ингредиент';
+    } finally {
+        submitting.value = false;
+    }
+}
+
+// --- Списание ---
+
+/** Открытие модалки списания */
+async function openWriteOff(ingredient) {
+    openMenuId.value = null;
+    writeOffIngredient.value = ingredient;
+    modalError.value = '';
+    writeOffForm.value = {
+        warehouse_id: null,
+        quantity: 1,
+        reason: '',
+        note: '',
+    };
+
+    await loadWarehouses();
+    writeOffForm.value.warehouse_id = getDefaultWarehouseId();
+}
+
+/** Закрытие модалки списания */
+function closeWriteOff() {
+    writeOffIngredient.value = null;
+    modalError.value = '';
+}
+
+/** Отправка списания */
+async function submitWriteOff() {
+    submitting.value = true;
+    modalError.value = '';
+    try {
+        await apiClient.post(`/admin/ingredients/${writeOffIngredient.value.id}/write-off`, {
+            warehouse_id: writeOffForm.value.warehouse_id,
+            quantity: writeOffForm.value.quantity,
+            reason: writeOffForm.value.reason,
+            note: writeOffForm.value.note || null,
+        });
+
+        closeWriteOff();
+        showSuccess('Ингредиент успешно списан');
+    } catch (error) {
+        modalError.value = error.response?.data?.message || 'Не удалось списать ингредиент';
+    } finally {
+        submitting.value = false;
+    }
+}
+
+// --- История ---
+
+/** Переход на страницу истории */
+function goToHistory(ingredient) {
+    openMenuId.value = null;
+    router.push({ name: 'admin-ingredient-history', params: { id: ingredient.id } });
+}
+
+// --- Уведомления ---
+
+/** Показать уведомление об успешном действии */
+function showSuccess(message) {
+    successMessage.value = message;
+    if (successTimer) clearTimeout(successTimer);
+    successTimer = setTimeout(() => {
+        successMessage.value = '';
     }, 3000);
 }
 
-onMounted(fetchIngredients);
+onMounted(() => {
+    fetchIngredients();
+    document.addEventListener('click', handleClickOutside);
+});
+
+onBeforeUnmount(() => {
+    document.removeEventListener('click', handleClickOutside);
+    if (successTimer) clearTimeout(successTimer);
+});
 </script>

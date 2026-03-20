@@ -40,4 +40,10 @@ class Ingredient extends Model
     {
         return $this->hasMany(IngredientReceipt::class);
     }
+
+    /** История движений товара */
+    public function stockMovements(): HasMany
+    {
+        return $this->hasMany(StockMovement::class);
+    }
 }

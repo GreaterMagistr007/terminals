@@ -135,6 +135,9 @@ const currentPageTitle = computed(() => {
     if (route.name === 'admin-warehouse-stocks') {
         return 'Остатки склада';
     }
+    if (route.name === 'admin-ingredient-history') {
+        return 'История ингредиента';
+    }
     const item = navItems.find(i => i.routeName === route.name);
     return item?.label || 'Администрирование';
 });
@@ -151,6 +154,10 @@ function isActive(routeName) {
     }
     // Подсвечивать «Склады» и для вложенного маршрута остатков
     if (routeName === 'admin-warehouses' && route.name === 'admin-warehouse-stocks') {
+        return true;
+    }
+    // Подсвечивать «Ингредиенты» для вложенного маршрута истории
+    if (routeName === 'admin-ingredients' && route.name === 'admin-ingredient-history') {
         return true;
     }
     return route.name === routeName;

@@ -149,6 +149,11 @@ const routes = [
                 component: () => import('@/pages/admin/Ingredients.vue'),
             },
             {
+                path: 'ingredients/:id/history',
+                name: 'admin-ingredient-history',
+                component: () => import('@/pages/admin/IngredientHistory.vue'),
+            },
+            {
                 path: 'warehouses',
                 name: 'admin-warehouses',
                 component: () => import('@/pages/admin/Warehouses.vue'),

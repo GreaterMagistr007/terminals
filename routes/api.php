@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\IngredientController;
 use App\Http\Controllers\Admin\IngredientReceiptController;
+use App\Http\Controllers\Admin\StockMovementController;
 use App\Http\Controllers\Admin\PointController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\VendistaTerminalController;
@@ -46,6 +47,10 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
 
         Route::apiResource('ingredients', IngredientController::class)->except(['show']);
         Route::post('/ingredients/{ingredient}/receipt', [IngredientReceiptController::class, 'store']);
+        Route::post('/ingredients/{ingredient}/purchase', [StockMovementController::class, 'purchase']);
+        Route::post('/ingredients/{ingredient}/transfer', [StockMovementController::class, 'transfer']);
+        Route::post('/ingredients/{ingredient}/write-off', [StockMovementController::class, 'writeOff']);
+        Route::get('/ingredients/{ingredient}/history', [StockMovementController::class, 'history']);
 
         Route::apiResource('warehouses', WarehouseController::class)->except(['show']);
         Route::get('/warehouses/{warehouse}/stocks', [WarehouseController::class, 'stocks']);
