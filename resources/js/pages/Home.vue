@@ -69,7 +69,7 @@
                     <div class="h-10 w-1 shrink-0 rounded-full" :class="statusBarClass(terminal)"></div>
                     <div class="flex-1 min-w-0">
                         <p class="font-medium text-gray-900 truncate dark:text-white">{{ terminal.comment || 'Без описания' }}</p>
-                        <p class="text-xs text-gray-400 dark:text-gray-500">продаж с последнего обслуживания: 0</p>
+                        <p class="text-xs text-gray-400 dark:text-gray-500">продаж с последнего обслуживания: {{ terminal.sales_since_last_visit ?? 0 }}</p>
                     </div>
                     <div class="shrink-0 flex items-center gap-2">
                         <span class="text-xs text-gray-400 dark:text-gray-500">{{ formatVisitDate(terminal.service_visits_max_visited_at) }}</span>
@@ -90,12 +90,21 @@
                     <div class="grid grid-cols-2 gap-3 mb-4">
                         <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-800">
                             <p class="text-xs text-gray-400 dark:text-gray-500">Вода</p>
-                            <div class="flex items-center gap-2 mt-1">
-                                <div class="h-1.5 flex-1 rounded-full bg-gray-200 dark:bg-gray-700">
-                                    <div class="h-1.5 rounded-full bg-gray-300" style="width: 0%"></div>
+                            <template v-if="terminal.latest_visit && (terminal.latest_visit.water_main != null || terminal.latest_visit.water_spare != null)">
+                                <div class="flex items-center gap-2 mt-1">
+                                    <div class="h-1.5 flex-1 rounded-full bg-gray-200 dark:bg-gray-700">
+                                        <div class="h-1.5 rounded-full bg-blue-400 dark:bg-blue-500 transition-all" :style="{ width: ((terminal.latest_visit.water_main ?? 0) * 100) + '%' }"></div>
+                                    </div>
+                                    <span class="text-xs font-semibold text-gray-600 dark:text-gray-300">{{ (terminal.latest_visit.water_main ?? 0).toFixed(1) }}</span>
                                 </div>
-                                <span class="text-sm font-semibold text-gray-400">—</span>
-                            </div>
+                                <div class="flex items-center gap-2 mt-1">
+                                    <div class="h-1.5 flex-1 rounded-full bg-gray-200 dark:bg-gray-700">
+                                        <div class="h-1.5 rounded-full bg-cyan-400 dark:bg-cyan-500 transition-all" :style="{ width: ((terminal.latest_visit.water_spare ?? 0) * 100) + '%' }"></div>
+                                    </div>
+                                    <span class="text-xs font-semibold text-gray-600 dark:text-gray-300">{{ (terminal.latest_visit.water_spare ?? 0).toFixed(1) }}</span>
+                                </div>
+                            </template>
+                            <p v-else class="mt-1 text-sm font-semibold text-gray-400">—</p>
                         </div>
                         <div
                             class="rounded-lg bg-gray-50 p-3 dark:bg-gray-800"
@@ -110,7 +119,19 @@
                     <!-- Ингредиенты -->
                     <div class="mb-4">
                         <p class="text-xs text-gray-400 dark:text-gray-500 mb-2">Ингредиенты</p>
-                        <p class="text-xs text-gray-300 dark:text-gray-600">Данные появятся после первого обслуживания</p>
+                        <template v-if="terminal.latest_visit?.ingredients?.length">
+                            <div class="flex flex-wrap gap-1.5">
+                                <template v-for="vi in terminal.latest_visit.ingredients" :key="vi.id">
+                                    <span v-if="vi.brought" class="rounded-md bg-green-100 px-1.5 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/40 dark:text-green-400">
+                                        {{ vi.ingredient?.short_name || vi.ingredient?.name }} +{{ vi.brought }}
+                                    </span>
+                                    <span v-if="vi.needed" class="rounded-md bg-orange-100 px-1.5 py-0.5 text-xs font-medium text-orange-700 dark:bg-orange-900/40 dark:text-orange-400">
+                                        {{ vi.ingredient?.short_name || vi.ingredient?.name }} {{ vi.needed }}
+                                    </span>
+                                </template>
+                            </div>
+                        </template>
+                        <p v-else class="text-xs text-gray-300 dark:text-gray-600">Нет данных</p>
                     </div>
 
                     <!-- Кнопки действий -->
