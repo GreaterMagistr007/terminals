@@ -48,7 +48,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onBeforeUnmount } from 'vue';
 import apiClient from '@/api/client';
 
 const sales = ref([]);
@@ -99,5 +99,12 @@ async function refreshSales() {
     }
 }
 
-onMounted(fetchSales);
+onMounted(() => {
+    fetchSales();
+    document.addEventListener('vendista:updated', fetchSales);
+});
+
+onBeforeUnmount(() => {
+    document.removeEventListener('vendista:updated', fetchSales);
+});
 </script>

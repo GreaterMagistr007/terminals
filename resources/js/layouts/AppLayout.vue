@@ -87,7 +87,9 @@ const FETCH_INTERVAL_MS = 60_000;
 let fetchIntervalId = null;
 
 function backgroundFetch() {
-    apiClient.post('/vendista/transactions/fetch').catch(() => {});
+    apiClient.post('/vendista/transactions/fetch')
+        .then(() => document.dispatchEvent(new CustomEvent('vendista:updated')))
+        .catch(() => {});
 }
 
 onMounted(() => {

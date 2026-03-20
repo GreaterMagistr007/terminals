@@ -180,7 +180,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue';
 import { useRouter } from 'vue-router';
 import apiClient from '@/api/client';
 
@@ -382,5 +382,12 @@ function pluralize(n, one, few, many) {
     return many;
 }
 
-onMounted(fetchTerminals);
+onMounted(() => {
+    fetchTerminals();
+    document.addEventListener('vendista:updated', fetchTerminals);
+});
+
+onBeforeUnmount(() => {
+    document.removeEventListener('vendista:updated', fetchTerminals);
+});
 </script>
