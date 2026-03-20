@@ -61,9 +61,10 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
+import apiClient from '@/api/client';
 
 const router = useRouter();
 const route = useRoute();
@@ -80,4 +81,21 @@ async function logout() {
     await authStore.logout();
     router.replace('/login');
 }
+
+// Фоновое обновление транзакций раз в минуту
+const FETCH_INTERVAL_MS = 60_000;
+let fetchIntervalId = null;
+
+function backgroundFetch() {
+    apiClient.post('/vendista/transactions/fetch').catch(() => {});
+}
+
+onMounted(() => {
+    backgroundFetch();
+    fetchIntervalId = setInterval(backgroundFetch, FETCH_INTERVAL_MS);
+});
+
+onBeforeUnmount(() => {
+    if (fetchIntervalId) clearInterval(fetchIntervalId);
+});
 </script>

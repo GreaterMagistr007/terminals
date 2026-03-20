@@ -17,7 +17,9 @@ class VendistaService
 {
     private const CACHE_TOKEN_KEY = 'vendista_api_token';
     private const CACHE_TERMINALS_SYNC_KEY = 'vendista_terminals_last_sync';
+    private const CACHE_FETCH_TRANSACTIONS_KEY = 'vendista_fetch_transactions_last';
     private const TERMINALS_SYNC_INTERVAL_HOURS = 24;
+    private const FETCH_TRANSACTIONS_THROTTLE_SECONDS = 60;
     private const DEFAULT_TRANSACTIONS_DAYS = 30;
 
     private string $baseUrl;
@@ -514,8 +516,16 @@ class VendistaService
      *
      * @return array{fetched: int, inserted: int, updated: int, skipped: int}|null
      */
-    public function fetchLatestTransactions(): ?array
+    public function fetchLatestTransactions(bool $force = false): ?array
     {
+        // Throttle: не чаще раз в минуту (если не принудительный вызов)
+        if (!$force) {
+            $lastFetch = Cache::get(self::CACHE_FETCH_TRANSACTIONS_KEY);
+            if ($lastFetch !== null && now()->diffInSeconds($lastFetch) < self::FETCH_TRANSACTIONS_THROTTLE_SECONDS) {
+                return ['fetched' => 0, 'inserted' => 0, 'updated' => 0, 'skipped' => 0, 'throttled' => true];
+            }
+        }
+
         $this->isSyncing = true;
 
         try {
@@ -586,6 +596,8 @@ class VendistaService
                 }
                 $inserted = count($toInsert);
             }
+
+            Cache::put(self::CACHE_FETCH_TRANSACTIONS_KEY, now());
 
             Log::info('Vendista: получение последних транзакций', [
                 'dateFrom' => $dateFromStr,
