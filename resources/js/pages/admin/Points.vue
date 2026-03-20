@@ -33,7 +33,25 @@
                             {{ terminal.settings.address }}
                         </p>
                     </div>
-                    <div class="ml-3 flex shrink-0 items-center gap-2">
+                    <div class="ml-3 flex shrink-0 flex-wrap items-center justify-end gap-1">
+                        <span
+                            v-if="!terminal.ingredients?.length"
+                            class="rounded bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/40 dark:text-red-400"
+                        >
+                            Не настроены ингредиенты
+                        </span>
+                        <span
+                            v-if="!terminal.settings?.warehouse_id"
+                            class="rounded bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/40 dark:text-red-400"
+                        >
+                            Не выбран склад отгрузки
+                        </span>
+                        <span
+                            v-if="!terminal.settings?.address && !(terminal.settings?.latitude && terminal.settings?.longitude)"
+                            class="rounded bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/40 dark:text-red-400"
+                        >
+                            Не обозначен адрес
+                        </span>
                         <span
                             v-if="terminal.settings?.hidden"
                             class="rounded bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700 dark:bg-orange-900/40 dark:text-orange-400"
@@ -45,12 +63,6 @@
                             class="rounded bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-900/40 dark:text-purple-400"
                         >
                             Без воды
-                        </span>
-                        <span
-                            :class="stateClass(terminal.state)"
-                            class="rounded px-2 py-1 text-xs font-medium"
-                        >
-                            {{ stateLabel(terminal.state) }}
                         </span>
                         <!-- Стрелка -->
                         <svg class="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -121,31 +133,7 @@ const showReport = ref(false);
 const syncError = ref('');
 const report = ref({ added: 0, updated: 0, deleted: 0 });
 
-const stateLabels = {
-    0: 'Неизвестно',
-    1: 'Онлайн',
-    2: 'Офлайн',
-    3: 'Ошибка',
-    4: 'Заблокирован',
-    5: 'Отключён',
-    6: 'Инициализация',
-    7: 'Обновление',
-};
 
-function stateLabel(state) {
-    return stateLabels[state] || 'Неизвестно';
-}
-
-function stateClass(state) {
-    const classes = {
-        1: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-        2: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300',
-        3: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-        4: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-        5: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300',
-    };
-    return classes[state] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
-}
 
 async function fetchTerminals() {
     try {
