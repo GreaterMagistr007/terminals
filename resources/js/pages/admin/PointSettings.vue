@@ -120,16 +120,20 @@
             </div>
 
             <!-- Контейнер карты -->
-            <div ref="mapContainer" class="min-h-0 flex-1"></div>
+            <div ref="mapContainer" class="relative min-h-0 flex-1 overflow-hidden"></div>
 
-            <!-- Информация о выбранной точке -->
-            <div v-if="mapAddress || mapCoords" class="shrink-0 border-t border-gray-200 px-4 py-2 dark:border-gray-800">
-                <p v-if="mapAddress" class="text-sm text-gray-700 dark:text-gray-300">{{ mapAddress }}</p>
-                <p v-if="mapCoords" class="text-xs text-gray-400 dark:text-gray-500">{{ mapCoords[0] }}, {{ mapCoords[1] }}</p>
-            </div>
+            <!-- Информация о выбранной точке + кнопки -->
+            <div ref="mapFooter" class="shrink-0">
+                <div class="border-t border-gray-200 px-4 py-2 dark:border-gray-800">
+                    <p class="text-sm text-gray-700 dark:text-gray-300">{{ mapAddress || 'Нажмите на карту для выбора точки' }}</p>
+                    <p class="text-xs text-gray-400 dark:text-gray-500">
+                        <template v-if="mapCoords">{{ mapCoords[0] }}, {{ mapCoords[1] }}</template>
+                        <template v-else>Координаты не выбраны</template>
+                    </p>
+                </div>
 
-            <!-- Кнопки -->
-            <div class="shrink-0 flex gap-3 border-t border-gray-200 p-4 dark:border-gray-800">
+                <!-- Кнопки -->
+                <div class="flex gap-3 border-t border-gray-200 p-4 dark:border-gray-800">
                 <button
                     @click="cancelMap"
                     class="rounded-lg bg-gray-200 px-4 py-2.5 font-medium text-gray-700 transition-colors hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
@@ -145,6 +149,7 @@
                 >
                     {{ saving ? 'Сохранение...' : 'Сохранить' }}
                 </button>
+                </div>
             </div>
         </div>
     </div>
@@ -175,6 +180,7 @@ const settings = ref({
 // Состояние карты
 const mapOpen = ref(false);
 const mapContainer = ref(null);
+const mapFooter = ref(null);
 const mapAddress = ref('');
 const mapCoords = ref(null);
 
@@ -336,6 +342,9 @@ function initMap() {
         controls: ['zoomControl', 'geolocationControl'],
     });
 
+    // Принудительный пересчёт размера карты под контейнер
+    ymapInstance.container.fitToViewport();
+
     // Поиск по адресу (встроенный контрол Яндекс.Карт)
     const searchControl = new window.ymaps.control.SearchControl({
         options: {
@@ -439,7 +448,7 @@ async function reverseGeocode(coords) {
     if (houseObject) {
         // Проверяем, что дом находится в разумной близости (не дальше ~100м)
         const houseCoords = houseObject.geometry.getCoordinates();
-        const distance = window.ymaps.coordSystem.geo.getDistance(coords, houseCoords);
+        const distance = getDistance(coords, houseCoords);
 
         if (distance < 100) {
             return houseObject.getAddressLine();
@@ -450,6 +459,17 @@ async function reverseGeocode(coords) {
     const fallbackResult = await window.ymaps.geocode(coords, { results: 1 });
     const fallbackObject = fallbackResult.geoObjects.get(0);
     return fallbackObject ? fallbackObject.getAddressLine() : '';
+}
+
+/** Расстояние между двумя координатами в метрах (формула Haversine) */
+function getDistance(coord1, coord2) {
+    const R = 6371000;
+    const toRad = (deg) => deg * Math.PI / 180;
+    const dLat = toRad(coord2[0] - coord1[0]);
+    const dLon = toRad(coord2[1] - coord1[1]);
+    const a = Math.sin(dLat / 2) ** 2
+        + Math.cos(toRad(coord1[0])) * Math.cos(toRad(coord2[0])) * Math.sin(dLon / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 /** Форматирование содержимого балуна */
