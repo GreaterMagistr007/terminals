@@ -1,27 +1,29 @@
 <template>
     <div class="px-4 py-4">
-        <!-- Заголовок с счётчиками -->
+        <!-- Заголовок с сортировкой -->
         <div class="mb-4 flex items-center justify-between">
             <h1 class="text-lg font-bold text-gray-900 dark:text-white">Точки обслуживания</h1>
-            <div class="flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500">
-                <span class="flex h-2 w-2 rounded-full bg-green-400"></span>
-                {{ onlineCount }} ок
-                <span class="ml-2 flex h-2 w-2 rounded-full bg-red-400"></span>
-                {{ urgentCount }} сроч.
-            </div>
+            <select
+                v-model="sortMode"
+                @change="saveSortMode"
+                class="rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400"
+            >
+                <option value="alphabet">По алфавиту</option>
+                <option value="service">По обслуживанию</option>
+            </select>
         </div>
 
         <!-- Загрузка -->
         <p v-if="loading" class="text-center text-sm text-gray-400 dark:text-gray-500">Загрузка...</p>
 
         <!-- Пустой список -->
-        <p v-else-if="!terminals.length" class="text-center text-sm text-gray-400 dark:text-gray-500">
+        <p v-else-if="!sortedTerminals.length" class="text-center text-sm text-gray-400 dark:text-gray-500">
             Терминалов нет. Администратор может загрузить список через раздел «Терминалы».
         </p>
 
         <!-- Список терминалов -->
         <div v-else class="space-y-2">
-            <div v-for="terminal in terminals" :key="terminal.id"
+            <div v-for="terminal in sortedTerminals" :key="terminal.id"
                 class="overflow-hidden rounded-xl bg-white shadow-sm dark:bg-gray-900"
             >
                 <!-- Свёрнутая строка -->
@@ -98,9 +100,29 @@ import apiClient from '@/api/client';
 
 const IRKUTSK_TZ = 'Asia/Irkutsk';
 
+const SORT_KEY = 'terminals_sort_mode';
+
 const terminals = ref([]);
 const loading = ref(true);
 const expandedId = ref(null);
+const sortMode = ref(localStorage.getItem(SORT_KEY) || 'alphabet');
+
+function saveSortMode() {
+    localStorage.setItem(SORT_KEY, sortMode.value);
+}
+
+const sortedTerminals = computed(() => {
+    const list = [...terminals.value];
+    if (sortMode.value === 'alphabet') {
+        return list.sort((a, b) => (a.comment || '').localeCompare(b.comment || '', 'ru'));
+    }
+    // По обслуживанию: от самого давнего (null/старая дата первым) к недавнему
+    return list.sort((a, b) => {
+        const dateA = a.last_online_at ? new Date(a.last_online_at).getTime() : 0;
+        const dateB = b.last_online_at ? new Date(b.last_online_at).getTime() : 0;
+        return dateA - dateB;
+    });
+});
 
 const toggle = (id) => {
     expandedId.value = expandedId.value === id ? null : id;
@@ -114,9 +136,6 @@ async function fetchTerminals() {
         loading.value = false;
     }
 }
-
-const onlineCount = computed(() => terminals.value.filter(t => t.state === 1).length);
-const urgentCount = computed(() => terminals.value.filter(t => t.state !== 1).length);
 
 function statusBarClass(terminal) {
     // TODO: заменить на логику по данным обслуживания
