@@ -12,7 +12,7 @@ class IngredientController extends Controller
     /** Список всех ингредиентов */
     public function index(): JsonResponse
     {
-        $ingredients = Ingredient::orderBy('name')->get();
+        $ingredients = Ingredient::with('warehouseStocks.warehouse')->orderBy('name')->get();
 
         return response()->json(['ingredients' => $ingredients]);
     }

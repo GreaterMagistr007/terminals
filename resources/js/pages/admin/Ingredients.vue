@@ -194,117 +194,82 @@
                     </div>
 
                     <!-- Режим просмотра -->
-                    <div v-else class="flex items-center justify-between">
-                        <div>
-                            <p class="font-medium text-gray-900 dark:text-white">
-                                {{ ingredient.name }}
-                                <span v-if="ingredient.short_name" class="ml-1 text-sm font-normal text-gray-400 dark:text-gray-500">({{ ingredient.short_name }})</span>
-                            </p>
-                            <p class="text-sm text-gray-500 dark:text-gray-400">
-                                {{ ingredient.unit }}, {{ ingredient.quantity_per_package }} в таре
-                                <span class="ml-2">{{ formatCost(ingredient.cost_per_unit) }}</span>
-                            </p>
-                            <p v-if="ingredient.quantity_per_box" class="text-xs text-gray-400 dark:text-gray-500">
-                                Коробка: {{ ingredient.quantity_per_box }} шт
-                                <span v-if="ingredient.cost_per_unit_in_box" class="ml-1">/ {{ formatCost(ingredient.cost_per_unit_in_box) }} за ед.</span>
-                            </p>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <!-- Выпадающее меню действий -->
-                            <div class="relative">
+                    <div v-else>
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="font-medium text-gray-900 dark:text-white">
+                                    {{ ingredient.name }}
+                                    <span v-if="ingredient.short_name" class="ml-1 text-sm font-normal text-gray-400 dark:text-gray-500">({{ ingredient.short_name }})</span>
+                                </p>
+                                <p class="text-sm text-gray-500 dark:text-gray-400">
+                                    {{ ingredient.unit }}, {{ ingredient.quantity_per_package }} в таре
+                                    <span class="ml-2">{{ formatCost(ingredient.cost_per_unit) }}</span>
+                                </p>
+                                <p v-if="ingredient.quantity_per_box" class="text-xs text-gray-400 dark:text-gray-500">
+                                    Коробка: {{ ingredient.quantity_per_box }} шт
+                                    <span v-if="ingredient.cost_per_unit_in_box" class="ml-1">/ {{ formatCost(ingredient.cost_per_unit_in_box) }} за ед.</span>
+                                </p>
+                            </div>
+                            <div class="flex items-center gap-2">
                                 <button
-                                    @click="toggleMenu(ingredient.id)"
-                                    class="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 active:bg-gray-200 dark:hover:bg-gray-700 dark:hover:text-gray-300 transition-colors"
-                                    title="Действия"
+                                    @click="startEdit(ingredient)"
+                                    class="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-blue-500 active:bg-gray-200 dark:hover:bg-gray-700 dark:hover:text-blue-400 transition-colors"
+                                    title="Редактировать"
                                 >
-                                    <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
-                                        <circle cx="12" cy="5" r="1.5" />
-                                        <circle cx="12" cy="12" r="1.5" />
-                                        <circle cx="12" cy="19" r="1.5" />
+                                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
                                     </svg>
                                 </button>
-
-                                <!-- Выпадающее меню -->
-                                <div
-                                    v-if="openMenuId === ingredient.id"
-                                    class="absolute right-0 z-20 mt-1 w-48 rounded-lg bg-white py-1 shadow-lg ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10"
+                                <button
+                                    @click="confirmDelete(ingredient)"
+                                    class="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-red-500 active:bg-gray-200 dark:hover:bg-gray-700 dark:hover:text-red-400 transition-colors"
+                                    title="Удалить"
                                 >
-                                    <button
-                                        @click="openPurchase(ingredient)"
-                                        class="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-700"
-                                    >
-                                        <svg class="h-4 w-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                                        </svg>
-                                        Оприходовать
-                                    </button>
-                                    <button
-                                        @click="openTransfer(ingredient)"
-                                        class="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-700"
-                                    >
-                                        <svg class="h-4 w-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                                            <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
-                                        </svg>
-                                        Переместить
-                                    </button>
-                                    <button
-                                        @click="openWriteOff(ingredient)"
-                                        class="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-700"
-                                    >
-                                        <svg class="h-4 w-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                                            <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 12h-15" />
-                                        </svg>
-                                        Списать
-                                    </button>
-                                    <div class="my-1 border-t border-gray-100 dark:border-gray-700"></div>
-                                    <button
-                                        @click="goToHistory(ingredient)"
-                                        class="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-700"
-                                    >
-                                        <svg class="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                        </svg>
-                                        История
-                                    </button>
-                                </div>
+                                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                                    </svg>
+                                </button>
                             </div>
+                        </div>
 
-                            <!-- Редактирование -->
+                        <!-- Остатки по складам -->
+                        <div v-if="ingredient.warehouse_stocks?.length" class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                            <span
+                                v-for="(stock, idx) in ingredient.warehouse_stocks"
+                                :key="stock.id"
+                            >{{ stock.warehouse.name }}: <span class="font-medium text-gray-700 dark:text-gray-300">{{ stock.quantity }}</span><span v-if="idx < ingredient.warehouse_stocks.length - 1">, </span>
+                            </span>
+                            <span class="ml-2 font-medium text-gray-900 dark:text-white">| Всего: {{ totalStock(ingredient) }}</span>
+                        </div>
+                        <div v-else class="mt-2 text-sm text-gray-400 dark:text-gray-500">
+                            Нет остатков
+                        </div>
+
+                        <!-- Кнопки действий -->
+                        <div class="mt-3 flex flex-wrap gap-2">
                             <button
-                                @click="startEdit(ingredient)"
-                                class="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-blue-500 active:bg-gray-200 dark:hover:bg-gray-700 dark:hover:text-blue-400 transition-colors"
-                                title="Редактировать"
+                                @click="openPurchase(ingredient)"
+                                class="rounded border border-green-500 px-3 py-1 text-sm text-green-600 hover:bg-green-50 active:bg-green-100 dark:text-green-400 dark:hover:bg-green-900/30 dark:active:bg-green-900/50 transition-colors"
                             >
-                                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
-                                </svg>
+                                Оприходовать
                             </button>
-
-                            <!-- Переключатель активности -->
                             <button
-                                @click="toggleActive(ingredient)"
-                                :disabled="saving"
-                                class="relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200 focus:outline-none"
-                                :class="ingredient.is_active ? 'bg-blue-500' : 'bg-gray-300 dark:bg-gray-600'"
-                                role="switch"
-                                :aria-checked="ingredient.is_active"
-                                title="Активность"
+                                @click="openTransfer(ingredient)"
+                                class="rounded border border-blue-500 px-3 py-1 text-sm text-blue-600 hover:bg-blue-50 active:bg-blue-100 dark:text-blue-400 dark:hover:bg-blue-900/30 dark:active:bg-blue-900/50 transition-colors"
                             >
-                                <span
-                                    class="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform duration-200"
-                                    :class="ingredient.is_active ? 'translate-x-5' : 'translate-x-0'"
-                                ></span>
+                                Переместить
                             </button>
-
-                            <!-- Удаление -->
                             <button
-                                @click="confirmDelete(ingredient)"
-                                class="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-red-500 active:bg-gray-200 dark:hover:bg-gray-700 dark:hover:text-red-400 transition-colors"
-                                title="Удалить"
+                                @click="openWriteOff(ingredient)"
+                                class="rounded border border-red-500 px-3 py-1 text-sm text-red-600 hover:bg-red-50 active:bg-red-100 dark:text-red-400 dark:hover:bg-red-900/30 dark:active:bg-red-900/50 transition-colors"
                             >
-                                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-                                </svg>
+                                Списать
+                            </button>
+                            <button
+                                @click="goToHistory(ingredient)"
+                                class="rounded border border-gray-300 px-3 py-1 text-sm text-gray-600 hover:bg-gray-50 active:bg-gray-100 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-700 dark:active:bg-gray-600 transition-colors"
+                            >
+                                История
                             </button>
                         </div>
                     </div>
@@ -684,9 +649,6 @@ const modalError = ref('');
 const successMessage = ref('');
 let successTimer = null;
 
-// Выпадающее меню
-const openMenuId = ref(null);
-
 // Покупка / оприходование
 const purchaseIngredient = ref(null);
 const purchaseForm = ref({
@@ -836,17 +798,9 @@ async function saveEdit(ingredient) {
     }
 }
 
-/** Переключение активности */
-async function toggleActive(ingredient) {
-    saving.value = true;
-    try {
-        const { data } = await apiClient.put(`/admin/ingredients/${ingredient.id}`, {
-            is_active: !ingredient.is_active,
-        });
-        Object.assign(ingredient, data.ingredient);
-    } finally {
-        saving.value = false;
-    }
+/** Подсчёт общего остатка */
+function totalStock(ingredient) {
+    return (ingredient.warehouse_stocks || []).reduce((sum, s) => sum + s.quantity, 0);
 }
 
 /** Подтверждение удаления */
@@ -863,20 +817,6 @@ async function deleteIngredient() {
         deletingIngredient.value = null;
     } finally {
         deleting.value = false;
-    }
-}
-
-// --- Выпадающее меню ---
-
-/** Переключение видимости меню */
-function toggleMenu(ingredientId) {
-    openMenuId.value = openMenuId.value === ingredientId ? null : ingredientId;
-}
-
-/** Закрытие меню при клике вне */
-function handleClickOutside(event) {
-    if (openMenuId.value !== null && !event.target.closest('.relative')) {
-        openMenuId.value = null;
     }
 }
 
@@ -904,7 +844,6 @@ function getDefaultWarehouseId() {
 
 /** Открытие модалки покупки */
 async function openPurchase(ingredient) {
-    openMenuId.value = null;
     purchaseIngredient.value = ingredient;
     modalError.value = '';
     purchaseForm.value = {
@@ -938,15 +877,8 @@ async function submitPurchase() {
             note: purchaseForm.value.note || null,
         });
 
-        // Обновляем цену ингредиента в списке
-        const ingredient = purchaseIngredient.value;
-        if (purchaseForm.value.source === 'unit') {
-            ingredient.cost_per_unit = purchaseForm.value.cost_per_unit;
-        } else {
-            ingredient.cost_per_unit_in_box = purchaseForm.value.cost_per_unit;
-        }
-
         closePurchase();
+        await fetchIngredients();
         showSuccess('Ингредиент успешно оприходован');
     } catch (error) {
         modalError.value = error.response?.data?.message || 'Не удалось оприходовать ингредиент';
@@ -959,7 +891,6 @@ async function submitPurchase() {
 
 /** Открытие модалки перемещения */
 async function openTransfer(ingredient) {
-    openMenuId.value = null;
     transferIngredient.value = ingredient;
     modalError.value = '';
     transferForm.value = {
@@ -992,6 +923,7 @@ async function submitTransfer() {
         });
 
         closeTransfer();
+        await fetchIngredients();
         showSuccess('Ингредиент успешно перемещён');
     } catch (error) {
         modalError.value = error.response?.data?.message || 'Не удалось переместить ингредиент';
@@ -1004,7 +936,6 @@ async function submitTransfer() {
 
 /** Открытие модалки списания */
 async function openWriteOff(ingredient) {
-    openMenuId.value = null;
     writeOffIngredient.value = ingredient;
     modalError.value = '';
     writeOffForm.value = {
@@ -1037,6 +968,7 @@ async function submitWriteOff() {
         });
 
         closeWriteOff();
+        await fetchIngredients();
         showSuccess('Ингредиент успешно списан');
     } catch (error) {
         modalError.value = error.response?.data?.message || 'Не удалось списать ингредиент';
@@ -1049,7 +981,6 @@ async function submitWriteOff() {
 
 /** Переход на страницу истории */
 function goToHistory(ingredient) {
-    openMenuId.value = null;
     router.push({ name: 'admin-ingredient-history', params: { id: ingredient.id } });
 }
 
@@ -1066,11 +997,9 @@ function showSuccess(message) {
 
 onMounted(() => {
     fetchIngredients();
-    document.addEventListener('click', handleClickOutside);
 });
 
 onBeforeUnmount(() => {
-    document.removeEventListener('click', handleClickOutside);
     if (successTimer) clearTimeout(successTimer);
 });
 </script>
