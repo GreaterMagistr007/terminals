@@ -126,17 +126,22 @@ const routes = [
                 name: 'sales',
                 component: () => import('@/pages/Sales.vue'),
             },
+        ],
+    },
+    {
+        path: '/admin',
+        component: () => import('@/layouts/AdminLayout.vue'),
+        meta: { auth: true, admin: true },
+        children: [
             {
-                path: 'admin/users',
-                name: 'admin-users',
-                component: () => import('@/pages/admin/Users.vue'),
-                meta: { admin: true },
-            },
-            {
-                path: 'admin/terminals',
+                path: 'terminals',
                 name: 'admin-terminals',
                 component: () => import('@/pages/admin/Terminals.vue'),
-                meta: { admin: true },
+            },
+            {
+                path: 'users',
+                name: 'admin-users',
+                component: () => import('@/pages/admin/Users.vue'),
             },
         ],
     },

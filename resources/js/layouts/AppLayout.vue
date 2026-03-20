@@ -20,13 +20,7 @@
                         to="/admin/terminals"
                         @click="showMenu = false"
                         class="rounded-lg bg-gray-100 px-3 py-1.5 text-xs text-gray-600 active:bg-gray-200 dark:bg-gray-700 dark:text-gray-300"
-                    >Терминалы</router-link>
-                    <router-link
-                        v-if="authStore.isAdmin"
-                        to="/admin/users"
-                        @click="showMenu = false"
-                        class="rounded-lg bg-gray-100 px-3 py-1.5 text-xs text-gray-600 active:bg-gray-200 dark:bg-gray-700 dark:text-gray-300"
-                    >Пользователи</router-link>
+                    >Админка</router-link>
                     <button
                         @click="logout"
                         class="rounded-lg bg-red-50 px-3 py-1.5 text-xs text-red-500 active:bg-red-100 dark:bg-red-900/20 dark:text-red-400"
