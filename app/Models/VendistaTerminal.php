@@ -30,6 +30,7 @@ class VendistaTerminal extends Model
             'longitude' => 'decimal:7',
             'last_online_at' => 'datetime',
             'state' => 'integer',
+            'service_visits_max_visited_at' => 'datetime',
         ];
     }
 

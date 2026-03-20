@@ -8,6 +8,7 @@ use App\Models\ServiceVisitPhoto;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -72,11 +73,11 @@ class ServiceVisitController extends Controller
         }
 
         $visit = DB::transaction(function () use ($validated, $ingredientsData) {
-            // Создание визита
+            // Создание визита (время приходит в Asia/Irkutsk, конвертируем в UTC)
             $visit = ServiceVisit::create([
                 'terminal_id' => $validated['terminal_id'],
                 'user_id' => Auth::id(),
-                'visited_at' => $validated['visited_at'],
+                'visited_at' => Carbon::parse($validated['visited_at'], 'Asia/Irkutsk')->utc(),
                 'water_main' => $validated['water_main'] ?? null,
                 'water_spare' => $validated['water_spare'] ?? null,
                 'comment' => $validated['comment'] ?? null,
@@ -172,7 +173,7 @@ class ServiceVisitController extends Controller
 
         DB::transaction(function () use ($visit, $validated, $ingredientsData) {
             $visit->update([
-                'visited_at' => $validated['visited_at'],
+                'visited_at' => Carbon::parse($validated['visited_at'], 'Asia/Irkutsk')->utc(),
                 'water_main' => $validated['water_main'] ?? null,
                 'water_spare' => $validated['water_spare'] ?? null,
                 'comment' => $validated['comment'] ?? null,

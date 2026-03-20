@@ -235,7 +235,31 @@ function formatVisitDate(dateStr) {
     const irkNow = new Date(now.toLocaleString('en-US', { timeZone: IRKUTSK_TZ }));
     const irkDate = new Date(date.toLocaleString('en-US', { timeZone: IRKUTSK_TZ }));
 
+    const todayStart = new Date(irkNow);
+    todayStart.setHours(0, 0, 0, 0);
+
+    const tomorrowStart = new Date(todayStart);
+    tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+
+    // Форматирование времени по Иркутску (ЧЧ:ММ)
+    const irkTime = date.toLocaleTimeString('ru-RU', {
+        hour: '2-digit', minute: '2-digit',
+        timeZone: IRKUTSK_TZ,
+    });
+
     const diffMs = now - date;
+
+    // Дата в будущем или сегодня: показываем "Сегодня, ЧЧ:ММ"
+    if (diffMs < 0) {
+        if (irkDate >= todayStart && irkDate < tomorrowStart) {
+            return `Сегодня, ${irkTime}`;
+        }
+        return date.toLocaleDateString('ru-RU', {
+            day: 'numeric', month: 'long',
+            timeZone: IRKUTSK_TZ,
+        }) + `, ${irkTime}`;
+    }
+
     const diffMinutes = Math.floor(diffMs / 60000);
     const diffHours = Math.floor(diffMs / 3600000);
 
@@ -244,18 +268,15 @@ function formatVisitDate(dateStr) {
         return `${diffMinutes} ${pluralize(diffMinutes, 'минута', 'минуты', 'минут')}`;
     }
 
-    const todayStart = new Date(irkNow);
-    todayStart.setHours(0, 0, 0, 0);
+    if (irkDate >= todayStart) {
+        return `Сегодня, ${irkTime}`;
+    }
 
     const yesterdayStart = new Date(todayStart);
     yesterdayStart.setDate(yesterdayStart.getDate() - 1);
 
-    if (irkDate >= todayStart) {
-        return `${diffHours} ${pluralize(diffHours, 'час', 'часа', 'часов')}`;
-    }
-
     if (irkDate >= yesterdayStart) {
-        return 'Вчера';
+        return `Вчера, ${irkTime}`;
     }
 
     const diffDays = Math.floor((todayStart - irkDate) / 86400000) + 1;
