@@ -42,7 +42,29 @@
             <!-- Шаг 1: Вода -->
             <div v-if="currentStep === 1">
                 <h2 class="mb-1 text-lg font-bold text-gray-900 dark:text-white">Уровень воды</h2>
-                <p class="mb-5 text-sm text-gray-400 dark:text-gray-500">Укажите наполненность бутылей</p>
+                <p class="mb-4 text-sm text-gray-400 dark:text-gray-500">Укажите наполненность бутылей</p>
+
+                <!-- Кнопки быстрых действий -->
+                <div class="mb-4 flex gap-2">
+                    <button
+                        class="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-medium text-gray-600 active:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400 dark:active:bg-gray-800 transition-colors"
+                        @click="swapWater"
+                    >
+                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
+                        </svg>
+                        Поменять
+                    </button>
+                    <button
+                        class="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 text-sm font-medium text-blue-600 active:bg-blue-100 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-400 dark:active:bg-blue-900/40 transition-colors"
+                        @click="fillAllWater"
+                    >
+                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                        </svg>
+                        Заполнить все
+                    </button>
+                </div>
 
                 <!-- Основная бутыль -->
                 <div class="mb-6 rounded-2xl bg-white p-4 shadow-sm dark:bg-gray-900">
@@ -91,37 +113,56 @@
                 <p class="mb-5 text-sm text-gray-400 dark:text-gray-500">Укажите количество принесённых и нужных</p>
 
                 <div class="space-y-3">
-                    <div v-for="ing in ingredients" :key="ing.name" class="rounded-2xl bg-white p-4 shadow-sm dark:bg-gray-900">
-                        <div class="mb-3 flex items-center gap-3">
-                            <div class="flex h-9 w-9 items-center justify-center rounded-xl" :class="ing.bgClass">
+                    <div v-for="ing in ingredients" :key="ing.name" class="rounded-2xl bg-white shadow-sm dark:bg-gray-900 overflow-hidden">
+                        <!-- Заголовок карточки (всегда виден) -->
+                        <button
+                            class="flex w-full items-center gap-3 p-4 text-left active:bg-gray-50 dark:active:bg-gray-800 transition-colors"
+                            @click="ing.expanded = !ing.expanded"
+                        >
+                            <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" :class="ing.bgClass">
                                 <span class="text-base">{{ ing.icon }}</span>
                             </div>
-                            <span class="text-sm font-semibold text-gray-800 dark:text-gray-200">{{ ing.name }}</span>
-                        </div>
-                        <div class="flex items-center justify-between gap-4">
-                            <div class="flex-1">
-                                <p class="mb-2 text-center text-xs text-gray-400 dark:text-gray-500">Принёс</p>
-                                <div class="flex items-center justify-center gap-2">
-                                    <button class="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-100 text-gray-600 active:bg-gray-200 dark:bg-gray-800 dark:text-gray-300" @click="ing.brought = Math.max(0, ing.brought - 1)">
-                                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14" /></svg>
-                                    </button>
-                                    <span class="w-8 text-center text-lg font-bold text-gray-900 dark:text-white">{{ ing.brought }}</span>
-                                    <button class="flex h-8 w-8 items-center justify-center rounded-lg bg-green-100 text-green-700 active:bg-green-200 dark:bg-green-900/40 dark:text-green-400" @click="ing.brought++">
-                                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-                                    </button>
+                            <span class="flex-1 text-sm font-semibold text-gray-800 dark:text-gray-200">{{ ing.name }}</span>
+                            <!-- Бейджи со значениями, если есть (видны в свёрнутом состоянии) -->
+                            <span v-if="!ing.expanded && (ing.brought || ing.needed)" class="flex items-center gap-1.5 text-xs">
+                                <span v-if="ing.brought" class="rounded-md bg-green-100 px-1.5 py-0.5 font-medium text-green-700 dark:bg-green-900/40 dark:text-green-400">+{{ ing.brought }}</span>
+                                <span v-if="ing.needed" class="rounded-md bg-orange-100 px-1.5 py-0.5 font-medium text-orange-700 dark:bg-orange-900/40 dark:text-orange-400">{{ ing.needed }}</span>
+                            </span>
+                            <svg
+                                class="h-4 w-4 shrink-0 text-gray-400 transition-transform duration-200 dark:text-gray-500"
+                                :class="{ 'rotate-180': ing.expanded }"
+                                fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"
+                            >
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                            </svg>
+                        </button>
+                        <!-- Раскрывающееся содержимое -->
+                        <div v-if="ing.expanded" class="border-t border-gray-100 px-4 pb-4 pt-3 dark:border-gray-800">
+                            <div class="flex items-center justify-between gap-4">
+                                <div class="flex-1">
+                                    <p class="mb-2 text-center text-xs text-gray-400 dark:text-gray-500">Принёс</p>
+                                    <div class="flex items-center justify-center gap-2">
+                                        <button class="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-100 text-gray-600 active:bg-gray-200 dark:bg-gray-800 dark:text-gray-300" @click.stop="ing.brought = Math.max(0, ing.brought - 1)">
+                                            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14" /></svg>
+                                        </button>
+                                        <span class="w-8 text-center text-lg font-bold text-gray-900 dark:text-white">{{ ing.brought }}</span>
+                                        <button class="flex h-8 w-8 items-center justify-center rounded-lg bg-green-100 text-green-700 active:bg-green-200 dark:bg-green-900/40 dark:text-green-400" @click.stop="ing.brought++">
+                                            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+                                        </button>
+                                    </div>
                                 </div>
-                            </div>
-                            <div class="h-12 w-px bg-gray-100 dark:bg-gray-800"></div>
-                            <div class="flex-1">
-                                <p class="mb-2 text-center text-xs text-gray-400 dark:text-gray-500">Нужно</p>
-                                <div class="flex items-center justify-center gap-2">
-                                    <button class="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-100 text-gray-600 active:bg-gray-200 dark:bg-gray-800 dark:text-gray-300" @click="ing.needed = Math.max(0, ing.needed - 1)">
-                                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14" /></svg>
-                                    </button>
-                                    <span class="w-8 text-center text-lg font-bold text-gray-900 dark:text-white">{{ ing.needed }}</span>
-                                    <button class="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-100 text-orange-700 active:bg-orange-200 dark:bg-orange-900/40 dark:text-orange-400" @click="ing.needed++">
-                                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-                                    </button>
+                                <div class="h-12 w-px bg-gray-100 dark:bg-gray-800"></div>
+                                <div class="flex-1">
+                                    <p class="mb-2 text-center text-xs text-gray-400 dark:text-gray-500">Нужно</p>
+                                    <div class="flex items-center justify-center gap-2">
+                                        <button class="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-100 text-gray-600 active:bg-gray-200 dark:bg-gray-800 dark:text-gray-300" @click.stop="ing.needed = Math.max(0, ing.needed - 1)">
+                                            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14" /></svg>
+                                        </button>
+                                        <span class="w-8 text-center text-lg font-bold text-gray-900 dark:text-white">{{ ing.needed }}</span>
+                                        <button class="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-100 text-orange-700 active:bg-orange-200 dark:bg-orange-900/40 dark:text-orange-400" @click.stop="ing.needed++">
+                                            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -281,13 +322,13 @@ const water = reactive({ main: 0.5, spare: 0.0 });
 
 // TODO: загружать из справочника ингредиентов (Этап 2)
 const ingredients = reactive([
-    { name: 'Кофе', icon: '\u2615', bgClass: 'bg-amber-100 dark:bg-amber-900/30', brought: 0, needed: 0 },
-    { name: 'Молоко', icon: '\uD83E\uDD5B', bgClass: 'bg-blue-100 dark:bg-blue-900/30', brought: 0, needed: 0 },
-    { name: 'Сахар', icon: '\uD83E\uDDC2', bgClass: 'bg-yellow-100 dark:bg-yellow-900/30', brought: 0, needed: 0 },
-    { name: 'Шоколад', icon: '\uD83C\uDF6B', bgClass: 'bg-orange-100 dark:bg-orange-900/30', brought: 0, needed: 0 },
-    { name: 'Стаканы', icon: '\uD83E\uDD64', bgClass: 'bg-gray-100 dark:bg-gray-800', brought: 0, needed: 0 },
-    { name: 'Крышки', icon: '\u26AB', bgClass: 'bg-gray-100 dark:bg-gray-800', brought: 0, needed: 0 },
-    { name: 'Палочки', icon: '\uD83E\uDD62', bgClass: 'bg-green-100 dark:bg-green-900/30', brought: 0, needed: 0 },
+    { name: 'Кофе', icon: '\u2615', bgClass: 'bg-amber-100 dark:bg-amber-900/30', brought: 0, needed: 0, expanded: false },
+    { name: 'Молоко', icon: '\uD83E\uDD5B', bgClass: 'bg-blue-100 dark:bg-blue-900/30', brought: 0, needed: 0, expanded: false },
+    { name: 'Сахар', icon: '\uD83E\uDDC2', bgClass: 'bg-yellow-100 dark:bg-yellow-900/30', brought: 0, needed: 0, expanded: false },
+    { name: 'Шоколад', icon: '\uD83C\uDF6B', bgClass: 'bg-orange-100 dark:bg-orange-900/30', brought: 0, needed: 0, expanded: false },
+    { name: 'Стаканы', icon: '\uD83E\uDD64', bgClass: 'bg-gray-100 dark:bg-gray-800', brought: 0, needed: 0, expanded: false },
+    { name: 'Крышки', icon: '\u26AB', bgClass: 'bg-gray-100 dark:bg-gray-800', brought: 0, needed: 0, expanded: false },
+    { name: 'Палочки', icon: '\uD83E\uDD62', bgClass: 'bg-green-100 dark:bg-green-900/30', brought: 0, needed: 0, expanded: false },
 ]);
 
 const comment = ref('');
@@ -318,6 +359,17 @@ async function fetchTerminal() {
     } catch {
         router.replace('/');
     }
+}
+
+function swapWater() {
+    const temp = water.main;
+    water.main = water.spare;
+    water.spare = temp;
+}
+
+function fillAllWater() {
+    water.main = 1;
+    water.spare = 1;
 }
 
 function goBack() {
