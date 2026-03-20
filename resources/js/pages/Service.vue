@@ -1,7 +1,7 @@
 <template>
     <div class="flex min-h-screen flex-col bg-gray-50 dark:bg-gray-950">
         <!-- Шапка -->
-        <header class="flex items-center gap-3 bg-white px-4 py-3 shadow-sm dark:bg-gray-900">
+        <header class="fixed inset-x-0 top-0 z-10 flex items-center gap-3 bg-white px-4 py-3 shadow-sm dark:bg-gray-900">
             <button
                 class="flex h-9 w-9 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 active:bg-gray-200 dark:text-gray-400 dark:hover:bg-gray-800 dark:active:bg-gray-700"
                 @click="goBack"
@@ -20,7 +20,7 @@
         </header>
 
         <!-- Контент шагов -->
-        <main class="flex-1 overflow-y-auto px-4 pt-5 pb-32">
+        <main class="flex-1 overflow-y-auto px-4 pt-16 pb-32">
             <!-- Шаг 1: Вода -->
             <div v-if="currentStep === 1">
                 <h2 class="mb-1 text-lg font-bold text-gray-900 dark:text-white">Уровень воды</h2>
