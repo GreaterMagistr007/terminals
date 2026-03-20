@@ -94,15 +94,21 @@
                             <template v-if="terminal.latest_visit && (terminal.latest_visit.water_main != null || terminal.latest_visit.water_spare != null)">
                                 <div class="flex items-center gap-2 mt-1">
                                     <div class="h-1.5 flex-1 rounded-full bg-gray-200 dark:bg-gray-700">
-                                        <div class="h-1.5 rounded-full bg-blue-400 dark:bg-blue-500 transition-all" :style="{ width: ((terminal.latest_visit.water_main ?? 0) * 100) + '%' }"></div>
+                                        <div class="h-1.5 rounded-full transition-all"
+                                            :class="estimatedWater(terminal).main > 0.2 ? 'bg-blue-400 dark:bg-blue-500' : 'bg-red-400 dark:bg-red-500'"
+                                            :style="{ width: (estimatedWater(terminal).main * 100) + '%' }"
+                                        ></div>
                                     </div>
-                                    <span class="text-xs font-semibold text-gray-600 dark:text-gray-300">{{ (terminal.latest_visit.water_main ?? 0).toFixed(1) }}</span>
+                                    <span class="text-xs font-semibold" :class="estimatedWater(terminal).main > 0.2 ? 'text-gray-600 dark:text-gray-300' : 'text-red-500 dark:text-red-400'">{{ estimatedWater(terminal).main.toFixed(1) }}</span>
                                 </div>
                                 <div class="flex items-center gap-2 mt-1">
                                     <div class="h-1.5 flex-1 rounded-full bg-gray-200 dark:bg-gray-700">
-                                        <div class="h-1.5 rounded-full bg-cyan-400 dark:bg-cyan-500 transition-all" :style="{ width: ((terminal.latest_visit.water_spare ?? 0) * 100) + '%' }"></div>
+                                        <div class="h-1.5 rounded-full transition-all"
+                                            :class="estimatedWater(terminal).spare > 0.2 ? 'bg-cyan-400 dark:bg-cyan-500' : 'bg-red-400 dark:bg-red-500'"
+                                            :style="{ width: (estimatedWater(terminal).spare * 100) + '%' }"
+                                        ></div>
                                     </div>
-                                    <span class="text-xs font-semibold text-gray-600 dark:text-gray-300">{{ (terminal.latest_visit.water_spare ?? 0).toFixed(1) }}</span>
+                                    <span class="text-xs font-semibold" :class="estimatedWater(terminal).spare > 0.2 ? 'text-gray-600 dark:text-gray-300' : 'text-red-500 dark:text-red-400'">{{ estimatedWater(terminal).spare.toFixed(1) }}</span>
                                 </div>
                             </template>
                             <p v-else class="mt-1 text-sm font-semibold text-gray-400">—</p>
@@ -182,6 +188,34 @@ const router = useRouter();
 
 const IRKUTSK_TZ = 'Asia/Irkutsk';
 const SETTINGS_KEY = 'terminals_home_settings';
+
+// Константы расхода воды (будут заменены реальными рецептами)
+const BOTTLE_VOLUME_ML = 18900; // объём полной бутылки, мл
+const WATER_PER_CUP_ML = 340;  // расход воды на стакан, мл
+
+/**
+ * Расчёт оставшейся воды с учётом продаж.
+ * Когда основная бутыль заканчивается, расход переходит на запасную.
+ */
+function estimatedWater(terminal) {
+    if (!terminal.latest_visit) return { main: 0, spare: 0 };
+    const mainMl = (terminal.latest_visit.water_main ?? 0) * BOTTLE_VOLUME_ML;
+    const spareMl = (terminal.latest_visit.water_spare ?? 0) * BOTTLE_VOLUME_ML;
+    const usedMl = (terminal.sales_since_last_visit ?? 0) * WATER_PER_CUP_ML;
+
+    let remainingMain = mainMl - usedMl;
+    let remainingSpare = spareMl;
+
+    if (remainingMain < 0) {
+        remainingSpare = Math.max(0, spareMl + remainingMain);
+        remainingMain = 0;
+    }
+
+    return {
+        main: Math.min(1, remainingMain / BOTTLE_VOLUME_ML),
+        spare: Math.min(1, remainingSpare / BOTTLE_VOLUME_ML),
+    };
+}
 
 const terminals = ref([]);
 const loading = ref(true);
