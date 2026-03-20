@@ -11,6 +11,7 @@ use App\Http\Controllers\Admin\WarehouseController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Auth\TelegramBotCallbackController;
 use App\Http\Controllers\Auth\TelegramWidgetController;
+use App\Http\Controllers\SalesController;
 use App\Http\Controllers\ServiceVisitController;
 use Illuminate\Support\Facades\Route;
 
@@ -35,6 +36,14 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
     // Терминалы (для всех авторизованных)
     Route::get('/terminals', [VendistaTerminalController::class, 'index']);
     Route::get('/terminals/{terminal}', [VendistaTerminalController::class, 'show']);
+    Route::post('/terminals/refresh', [VendistaTerminalController::class, 'refresh']);
+
+    // Транзакции Vendista (обновление последних)
+    Route::post('/vendista/transactions/fetch', [VendistaTransactionController::class, 'fetch']);
+
+    // Продажи
+    Route::get('/sales/today', [SalesController::class, 'today']);
+    Route::post('/sales/refresh', [SalesController::class, 'refresh']);
 
     // Обслуживание
     Route::get('/service-visits', [ServiceVisitController::class, 'index']);

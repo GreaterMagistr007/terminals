@@ -36,6 +36,15 @@ class VendistaTerminalController extends Controller
         return response()->json(['terminal' => $terminal]);
     }
 
+    /** Обновление транзакций из Vendista + возврат данных терминалов */
+    public function refresh(VendistaService $vendistaService): JsonResponse
+    {
+        // Получаем последние транзакции, игнорируя ошибку
+        $vendistaService->fetchLatestTransactions();
+
+        return $this->index();
+    }
+
     /** Принудительная синхронизация терминалов из Vendista API */
     public function sync(VendistaService $vendistaService): JsonResponse
     {

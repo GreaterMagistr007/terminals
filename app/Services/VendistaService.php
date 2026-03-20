@@ -550,12 +550,13 @@ class VendistaService
             $remoteTransIds = array_column($remoteTransactions, 'id');
             $chunkSize = config('database.default') === 'sqlite' ? 50 : 500;
 
-            $existingByTransId = collect();
+            $existingModels = collect();
             foreach (array_chunk($remoteTransIds, $chunkSize) as $idsChunk) {
-                $existingByTransId = $existingByTransId->merge(
-                    VendistaTransaction::whereIn('trans_id', $idsChunk)->get()->keyBy('trans_id')
+                $existingModels = $existingModels->concat(
+                    VendistaTransaction::whereIn('trans_id', $idsChunk)->get()
                 );
             }
+            $existingByTransId = $existingModels->keyBy('trans_id');
 
             $inserted = 0;
             $updated = 0;

@@ -25,4 +25,22 @@ class VendistaTransactionController extends Controller
             'report' => $report,
         ]);
     }
+
+    /** Получение последних транзакций из Vendista API */
+    public function fetch(VendistaService $vendistaService): JsonResponse
+    {
+        $report = $vendistaService->fetchLatestTransactions();
+
+        if ($report === null) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Не удалось получить данные из Vendista API',
+            ], 502);
+        }
+
+        return response()->json([
+            'success' => true,
+            'report' => $report,
+        ]);
+    }
 }
