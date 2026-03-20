@@ -23,7 +23,7 @@ class PointController extends Controller
     /** Одна точка с настройками и ингредиентами */
     public function show(VendistaTerminal $terminal): JsonResponse
     {
-        $terminal->load(['settings', 'ingredients']);
+        $terminal->load(['settings.warehouse', 'ingredients']);
 
         return response()->json(['terminal' => $terminal]);
     }
@@ -37,6 +37,7 @@ class PointController extends Controller
             'address' => ['nullable', 'string', 'max:500'],
             'latitude' => ['nullable', 'numeric', 'between:-90,90'],
             'longitude' => ['nullable', 'numeric', 'between:-180,180'],
+            'warehouse_id' => ['nullable', 'integer', 'exists:warehouses,id'],
         ]);
 
         $terminal->settings()->updateOrCreate(
@@ -44,7 +45,7 @@ class PointController extends Controller
             $validated,
         );
 
-        $terminal->load('settings');
+        $terminal->load('settings.warehouse');
 
         return response()->json(['terminal' => $terminal]);
     }

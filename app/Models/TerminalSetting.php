@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Warehouse;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -14,6 +15,7 @@ class TerminalSetting extends Model
         'address',
         'latitude',
         'longitude',
+        'warehouse_id',
     ];
 
     protected function casts(): array
@@ -30,5 +32,11 @@ class TerminalSetting extends Model
     public function vendistaTerminal(): BelongsTo
     {
         return $this->belongsTo(VendistaTerminal::class);
+    }
+
+    /** Склад отгрузки */
+    public function warehouse(): BelongsTo
+    {
+        return $this->belongsTo(Warehouse::class);
     }
 }

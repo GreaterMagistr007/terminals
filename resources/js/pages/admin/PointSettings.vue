@@ -98,6 +98,24 @@
                 </div>
             </button>
 
+            <!-- Блок: склад отгрузки -->
+            <div class="rounded-lg bg-white p-4 shadow dark:bg-gray-800">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="font-medium text-gray-900 dark:text-white">Склад отгрузки</p>
+                        <p class="mt-0.5 text-sm text-gray-500 dark:text-gray-400">С этого склада списываются ингредиенты при обслуживании</p>
+                    </div>
+                </div>
+                <select
+                    v-model="settings.warehouse_id"
+                    @change="saveSettings"
+                    class="mt-3 block w-full rounded border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                >
+                    <option :value="null">Не назначен</option>
+                    <option v-for="w in warehouses" :key="w.id" :value="w.id">{{ w.name }}</option>
+                </select>
+            </div>
+
             <!-- Блок: используемые ингредиенты -->
             <div class="rounded-lg bg-white p-4 shadow dark:bg-gray-800">
                 <div class="flex items-center justify-between">
@@ -249,7 +267,11 @@ const settings = ref({
     address: null,
     latitude: null,
     longitude: null,
+    warehouse_id: null,
 });
+
+// Склады (для выбора склада отгрузки)
+const warehouses = ref([]);
 
 // Состояние карты
 const mapOpen = ref(false);
@@ -287,6 +309,7 @@ async function fetchTerminal() {
                 address: data.terminal.settings.address,
                 latitude: data.terminal.settings.latitude,
                 longitude: data.terminal.settings.longitude,
+                warehouse_id: data.terminal.settings.warehouse_id,
             };
         }
     } finally {
@@ -301,6 +324,16 @@ async function fetchAllIngredients() {
         allIngredients.value = data.ingredients;
     } catch {
         // Не критично — выпадающий список просто будет пустым
+    }
+}
+
+/** Загрузка списка складов */
+async function fetchWarehouses() {
+    try {
+        const { data } = await apiClient.get('/admin/warehouses');
+        warehouses.value = data.warehouses;
+    } catch {
+        // Не критично
     }
 }
 
@@ -385,6 +418,7 @@ async function saveSettings() {
             address: settings.value.address,
             latitude: settings.value.latitude,
             longitude: settings.value.longitude,
+            warehouse_id: settings.value.warehouse_id,
         });
 
         terminal.value = data.terminal;
@@ -396,6 +430,7 @@ async function saveSettings() {
                 address: data.terminal.settings.address,
                 latitude: data.terminal.settings.latitude,
                 longitude: data.terminal.settings.longitude,
+                warehouse_id: data.terminal.settings.warehouse_id,
             };
         }
     } catch (error) {
@@ -668,6 +703,7 @@ function destroyMap() {
 onMounted(() => {
     fetchTerminal();
     fetchAllIngredients();
+    fetchWarehouses();
     document.addEventListener('click', handleClickOutside);
 });
 
