@@ -139,6 +139,108 @@ class ServiceVisitController extends Controller
     }
 
     /**
+     * Обновление визита обслуживания.
+     *
+     * @param Request $request
+     * @param ServiceVisit $visit
+     * @return JsonResponse
+     */
+    public function update(Request $request, ServiceVisit $visit): JsonResponse
+    {
+        $validated = $request->validate([
+            'visited_at' => ['required', 'date'],
+            'water_main' => ['nullable', 'numeric', 'between:0,1'],
+            'water_spare' => ['nullable', 'numeric', 'between:0,1'],
+            'comment' => ['nullable', 'string', 'max:5000'],
+            'latitude' => ['nullable', 'numeric'],
+            'longitude' => ['nullable', 'numeric'],
+            'photo_inside' => ['nullable', 'image', 'max:10240'],
+            'photo_outside' => ['nullable', 'image', 'max:10240'],
+            'comment_photos' => ['nullable', 'array'],
+            'comment_photos.*' => ['image', 'max:10240'],
+            'remove_photo_ids' => ['nullable', 'json'],
+            'ingredients' => ['nullable', 'json'],
+        ]);
+
+        $ingredientsData = [];
+        if (!empty($validated['ingredients'])) {
+            $ingredientsData = json_decode($validated['ingredients'], true);
+            if (!is_array($ingredientsData)) {
+                return response()->json(['message' => 'Некорректный формат ингредиентов'], 422);
+            }
+        }
+
+        DB::transaction(function () use ($visit, $validated, $ingredientsData) {
+            $visit->update([
+                'visited_at' => $validated['visited_at'],
+                'water_main' => $validated['water_main'] ?? null,
+                'water_spare' => $validated['water_spare'] ?? null,
+                'comment' => $validated['comment'] ?? null,
+                'latitude' => $validated['latitude'] ?? null,
+                'longitude' => $validated['longitude'] ?? null,
+            ]);
+
+            // Пересоздание ингредиентов
+            $visit->ingredients()->delete();
+            foreach ($ingredientsData as $item) {
+                $brought = (int) ($item['brought'] ?? 0);
+                $needed = (int) ($item['needed'] ?? 0);
+
+                if ($brought > 0 || $needed > 0) {
+                    ServiceVisitIngredient::create([
+                        'service_visit_id' => $visit->id,
+                        'ingredient_id' => $item['ingredient_id'],
+                        'brought' => $brought,
+                        'needed' => $needed,
+                    ]);
+                }
+            }
+        });
+
+        // Удаление указанных фото
+        if (!empty($validated['remove_photo_ids'])) {
+            $removeIds = json_decode($validated['remove_photo_ids'], true);
+            if (is_array($removeIds)) {
+                $photosToRemove = $visit->photos()->whereIn('id', $removeIds)->get();
+                foreach ($photosToRemove as $photo) {
+                    Storage::disk('public')->delete($photo->path);
+                    $photo->delete();
+                }
+            }
+        }
+
+        // Замена фото inside/outside (если загружены новые)
+        if ($request->hasFile('photo_inside')) {
+            $visit->photos()->where('type', 'inside')->each(function ($photo) {
+                Storage::disk('public')->delete($photo->path);
+                $photo->delete();
+            });
+            $this->savePhoto($visit, $request->file('photo_inside'), 'inside');
+        }
+
+        if ($request->hasFile('photo_outside')) {
+            $visit->photos()->where('type', 'outside')->each(function ($photo) {
+                Storage::disk('public')->delete($photo->path);
+                $photo->delete();
+            });
+            $this->savePhoto($visit, $request->file('photo_outside'), 'outside');
+        }
+
+        // Добавление новых фото к комментарию
+        if ($request->hasFile('comment_photos')) {
+            foreach ($request->file('comment_photos') as $file) {
+                $this->savePhoto($visit, $file, 'comment');
+            }
+        }
+
+        $this->rotatePhotos($visit->terminal_id);
+
+        $visit->load(['ingredients.ingredient', 'photos', 'user:id,name']);
+
+        return response()->json(['visit' => $visit]);
+    }
+
+    /**
      * Сжатие и сохранение фотографии визита.
      *
      * @param ServiceVisit $visit

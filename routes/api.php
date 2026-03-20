@@ -39,6 +39,7 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
     Route::get('/service-visits', [ServiceVisitController::class, 'index']);
     Route::post('/service-visits', [ServiceVisitController::class, 'store']);
     Route::get('/service-visits/{visit}', [ServiceVisitController::class, 'show']);
+    Route::put('/service-visits/{visit}', [ServiceVisitController::class, 'update']);
 
     // Админские маршруты
     Route::middleware('admin')->prefix('admin')->group(function () {

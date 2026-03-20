@@ -33,7 +33,7 @@
             </button>
             <div class="flex-1 min-w-0">
                 <p class="text-sm font-bold text-gray-900 truncate dark:text-white">{{ terminal?.comment || 'Загрузка...' }}</p>
-                <p class="text-xs text-gray-400 dark:text-gray-500">Обслуживание</p>
+                <p class="text-xs text-gray-400 dark:text-gray-500">{{ isEditMode ? 'Редактирование визита' : 'Обслуживание' }}</p>
             </div>
             <span class="shrink-0 rounded-full bg-blue-100 px-2.5 py-1 text-xs font-semibold text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
                 Шаг {{ currentStep }} / {{ totalSteps }}
@@ -238,6 +238,21 @@
                 <!-- Прикреплённые фото к комментарию -->
                 <div class="mt-6">
                     <p class="mb-3 text-xs font-semibold text-gray-400 uppercase tracking-wider dark:text-gray-500">Прикрепить фото</p>
+                    <!-- Существующие фото (при редактировании) -->
+                    <div v-if="existingCommentPhotos.length" class="mb-3 grid grid-cols-2 gap-2">
+                        <div v-for="(photo, idx) in existingCommentPhotos" :key="'ex-' + photo.id" class="group relative">
+                            <img :src="photo.url" class="h-32 w-full rounded-xl object-cover" alt="Фото" />
+                            <button
+                                @click="removeExistingCommentPhoto(idx)"
+                                class="absolute top-1.5 right-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/50 text-white active:bg-black/70"
+                            >
+                                <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    <!-- Новые фото -->
                     <div v-if="commentPhotoPreviews.length" class="mb-3 grid grid-cols-2 gap-2">
                         <div v-for="(preview, idx) in commentPhotoPreviews" :key="idx" class="group relative">
                             <img :src="preview" class="h-32 w-full rounded-xl object-cover" alt="Фото" />
@@ -410,6 +425,15 @@ const terminal = ref(null);
 const currentStep = ref(1);
 const totalSteps = 4;
 
+// Режим редактирования
+const isEditMode = ref(false);
+const editingVisitId = ref(null);
+// Существующие фото при редактировании (URL с сервера, не File)
+const existingPhotoInside = ref(null);
+const existingPhotoOutside = ref(null);
+const existingCommentPhotos = ref([]); // [{id, url}]
+const removedPhotoIds = ref([]);
+
 /** Текущее время по Иркутску в формате datetime-local (YYYY-MM-DDTHH:MM) */
 function nowIrkutsk() {
     const now = new Date();
@@ -505,6 +529,67 @@ async function fetchTerminal() {
     }
 }
 
+/** Загрузка данных последнего визита для редактирования */
+async function loadVisitForEdit() {
+    try {
+        const { data } = await apiClient.get('/service-visits', { params: { terminal_id: route.params.id } });
+        if (!data.visits?.length) return;
+
+        const visit = data.visits[0]; // Первый = последний по дате
+        isEditMode.value = true;
+        editingVisitId.value = visit.id;
+
+        // Предзаполнение полей
+        if (visit.visited_at) {
+            const d = new Date(visit.visited_at);
+            const parts = new Intl.DateTimeFormat('sv-SE', {
+                timeZone: 'Asia/Irkutsk',
+                year: 'numeric', month: '2-digit', day: '2-digit',
+                hour: '2-digit', minute: '2-digit',
+            }).formatToParts(d);
+            const get = (type) => parts.find(p => p.type === type)?.value || '';
+            visitedAt.value = `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}`;
+        }
+
+        water.main = visit.water_main ?? 0.5;
+        water.spare = visit.water_spare ?? 0;
+        comment.value = visit.comment || '';
+
+        // Ингредиенты: совместить с привязанными к точке
+        if (visit.ingredients?.length) {
+            for (const vi of visit.ingredients) {
+                const ing = ingredients.value.find(i => i.id === vi.ingredient_id);
+                if (ing) {
+                    ing.brought = vi.brought || 0;
+                    ing.needed = vi.needed || 0;
+                }
+            }
+        }
+
+        // Фото
+        if (visit.photos?.length) {
+            for (const photo of visit.photos) {
+                if (photo.type === 'inside') {
+                    existingPhotoInside.value = photo;
+                    photoInsidePreview.value = photo.url;
+                    photos.inside = 'existing'; // Маркер: не File, а существующее фото
+                } else if (photo.type === 'outside') {
+                    existingPhotoOutside.value = photo;
+                    photoOutsidePreview.value = photo.url;
+                    photos.outside = 'existing';
+                } else if (photo.type === 'comment') {
+                    existingCommentPhotos.value.push({ id: photo.id, url: photo.url });
+                }
+            }
+        }
+
+        // Не показывать "Нужно принести" при редактировании
+        neededDismissed.value = true;
+    } catch {
+        // Не удалось загрузить визит — остаёмся в режиме создания
+    }
+}
+
 function swapWater() {
     const temp = water.main;
     water.main = water.spare;
@@ -542,13 +627,20 @@ function onPhotoSelected(event, type) {
 
 // Фото: переснять
 function retakePhoto(type) {
+    // Если было существующее фото — пометить на удаление
+    if (photos[type] === 'existing') {
+        const existing = type === 'inside' ? existingPhotoInside.value : existingPhotoOutside.value;
+        if (existing) removedPhotoIds.value.push(existing.id);
+    }
     photos[type] = null;
     if (type === 'inside') {
-        if (photoInsidePreview.value) URL.revokeObjectURL(photoInsidePreview.value);
+        existingPhotoInside.value = null;
+        if (photoInsidePreview.value && !photoInsidePreview.value.startsWith('/')) URL.revokeObjectURL(photoInsidePreview.value);
         photoInsidePreview.value = null;
         if (photoInsideInput.value) photoInsideInput.value.value = '';
     } else {
-        if (photoOutsidePreview.value) URL.revokeObjectURL(photoOutsidePreview.value);
+        existingPhotoOutside.value = null;
+        if (photoOutsidePreview.value && !photoOutsidePreview.value.startsWith('/')) URL.revokeObjectURL(photoOutsidePreview.value);
         photoOutsidePreview.value = null;
         if (photoOutsideInput.value) photoOutsideInput.value.value = '';
     }
@@ -566,7 +658,14 @@ function onCommentPhotosSelected(event) {
     event.target.value = '';
 }
 
-// Фото к комментарию: удаление
+// Фото к комментарию: удаление существующего
+function removeExistingCommentPhoto(idx) {
+    const photo = existingCommentPhotos.value[idx];
+    if (photo) removedPhotoIds.value.push(photo.id);
+    existingCommentPhotos.value.splice(idx, 1);
+}
+
+// Фото к комментарию: удаление нового
 function removeCommentPhoto(idx) {
     URL.revokeObjectURL(commentPhotoPreviews.value[idx]);
     commentPhotos.value.splice(idx, 1);
@@ -593,7 +692,6 @@ async function saveVisit() {
     saving.value = true;
     try {
         const formData = new FormData();
-        formData.append('terminal_id', route.params.id);
         formData.append('visited_at', visitedAt.value);
         formData.append('water_main', water.main);
         formData.append('water_spare', water.spare);
@@ -606,10 +704,11 @@ async function saveVisit() {
             formData.append('longitude', coords.value.longitude);
         }
 
-        if (photos.inside) {
+        // Фото: отправлять только новые файлы (не 'existing')
+        if (photos.inside && photos.inside !== 'existing') {
             formData.append('photo_inside', photos.inside);
         }
-        if (photos.outside) {
+        if (photos.outside && photos.outside !== 'existing') {
             formData.append('photo_outside', photos.outside);
         }
 
@@ -617,7 +716,7 @@ async function saveVisit() {
             formData.append('comment_photos[]', file);
         }
 
-        // Ингредиенты: только где brought > 0 или needed > 0
+        // Ингредиенты
         const ingredientsData = ingredients.value
             .filter(ing => ing.brought > 0 || ing.needed > 0)
             .map(ing => ({
@@ -627,9 +726,23 @@ async function saveVisit() {
             }));
         formData.append('ingredients', JSON.stringify(ingredientsData));
 
-        await apiClient.post('/service-visits', formData, {
-            headers: { 'Content-Type': 'multipart/form-data' },
-        });
+        if (isEditMode.value) {
+            // Режим редактирования: PUT
+            if (removedPhotoIds.value.length) {
+                formData.append('remove_photo_ids', JSON.stringify(removedPhotoIds.value));
+            }
+            // Laravel не поддерживает PUT с FormData напрямую — используем POST + _method
+            formData.append('_method', 'PUT');
+            await apiClient.post(`/service-visits/${editingVisitId.value}`, formData, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+            });
+        } else {
+            // Режим создания: POST
+            formData.append('terminal_id', route.params.id);
+            await apiClient.post('/service-visits', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+            });
+        }
 
         router.push('/');
     } catch (error) {
@@ -658,8 +771,11 @@ onBeforeUnmount(() => {
     clearTimeout(toastTimer);
 });
 
-onMounted(() => {
-    fetchTerminal();
+onMounted(async () => {
+    await fetchTerminal();
+    if (route.query.edit === 'last') {
+        await loadVisitForEdit();
+    }
     requestGeolocation();
 });
 </script>

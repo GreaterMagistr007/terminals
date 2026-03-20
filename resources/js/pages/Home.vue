@@ -86,7 +86,11 @@
                                 <span class="text-sm font-semibold text-gray-400">—</span>
                             </div>
                         </div>
-                        <div class="rounded-lg bg-gray-50 p-3 dark:bg-gray-800">
+                        <div
+                            class="rounded-lg bg-gray-50 p-3 dark:bg-gray-800"
+                            :class="terminal.service_visits_max_visited_at ? 'cursor-pointer active:bg-gray-100 dark:active:bg-gray-700' : ''"
+                            @click.stop="terminal.service_visits_max_visited_at && confirmEditVisit(terminal.id)"
+                        >
                             <p class="text-xs text-gray-400 dark:text-gray-500">Последний визит</p>
                             <p class="mt-1 text-sm font-semibold text-gray-900 dark:text-white">{{ formatVisitDate(terminal.service_visits_max_visited_at) }}</p>
                         </div>
@@ -116,12 +120,32 @@
                 </div>
             </div>
         </div>
+        <!-- Модалка подтверждения редактирования -->
+        <div v-if="editModal.visible" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="editModal.visible = false">
+            <div class="mx-4 w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl dark:bg-gray-800">
+                <h3 class="text-base font-bold text-gray-900 dark:text-white">Изменить последний визит?</h3>
+                <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Данные визита будут загружены в форму для редактирования</p>
+                <div class="mt-5 flex gap-3">
+                    <button
+                        @click="editModal.visible = false"
+                        class="flex-1 rounded-xl bg-gray-100 py-2.5 text-sm font-semibold text-gray-700 active:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:active:bg-gray-600"
+                    >Нет</button>
+                    <button
+                        @click="goToEditVisit"
+                        class="flex-1 rounded-xl bg-blue-500 py-2.5 text-sm font-semibold text-white active:bg-blue-600"
+                    >Да</button>
+                </div>
+            </div>
+        </div>
     </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
 import apiClient from '@/api/client';
+
+const router = useRouter();
 
 const IRKUTSK_TZ = 'Asia/Irkutsk';
 const SETTINGS_KEY = 'terminals_home_settings';
@@ -162,6 +186,19 @@ const sortedTerminals = computed(() => {
 const toggle = (id) => {
     expandedId.value = expandedId.value === id ? null : id;
 };
+
+// Модалка редактирования последнего визита
+const editModal = reactive({ visible: false, terminalId: null });
+
+function confirmEditVisit(terminalId) {
+    editModal.terminalId = terminalId;
+    editModal.visible = true;
+}
+
+function goToEditVisit() {
+    editModal.visible = false;
+    router.push({ name: 'service', params: { id: editModal.terminalId }, query: { edit: 'last' } });
+}
 
 async function fetchTerminals() {
     try {
