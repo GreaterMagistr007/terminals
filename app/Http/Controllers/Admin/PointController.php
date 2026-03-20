@@ -49,14 +49,19 @@ class PointController extends Controller
         return response()->json(['terminal' => $terminal]);
     }
 
-    /** Добавление ингредиента к точке */
+    /** Добавление ингредиента к точке (в конец списка) */
     public function addIngredient(Request $request, VendistaTerminal $terminal): JsonResponse
     {
         $validated = $request->validate([
             'ingredient_id' => ['required', 'integer', 'exists:ingredients,id'],
         ]);
 
-        $terminal->ingredients()->syncWithoutDetaching([$validated['ingredient_id']]);
+        $maxOrder = $terminal->ingredients()->max('terminal_ingredients.sort_order') ?? -1;
+
+        $terminal->ingredients()->syncWithoutDetaching([
+            $validated['ingredient_id'] => ['sort_order' => $maxOrder + 1],
+        ]);
+
         $terminal->load('ingredients');
 
         return response()->json(['ingredients' => $terminal->ingredients]);
@@ -66,6 +71,25 @@ class PointController extends Controller
     public function removeIngredient(VendistaTerminal $terminal, Ingredient $ingredient): JsonResponse
     {
         $terminal->ingredients()->detach($ingredient->id);
+        $terminal->load('ingredients');
+
+        return response()->json(['ingredients' => $terminal->ingredients]);
+    }
+
+    /** Изменение порядка ингредиентов на точке */
+    public function reorderIngredients(Request $request, VendistaTerminal $terminal): JsonResponse
+    {
+        $validated = $request->validate([
+            'ingredient_ids' => ['required', 'array'],
+            'ingredient_ids.*' => ['integer', 'exists:ingredients,id'],
+        ]);
+
+        foreach ($validated['ingredient_ids'] as $order => $ingredientId) {
+            $terminal->ingredients()->updateExistingPivot($ingredientId, [
+                'sort_order' => $order,
+            ]);
+        }
+
         $terminal->load('ingredients');
 
         return response()->json(['ingredients' => $terminal->ingredients]);

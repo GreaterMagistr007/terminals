@@ -144,8 +144,10 @@ function saveSettings() {
 }
 
 const sortedTerminals = computed(() => {
-    // TODO: фильтрация скрытых терминалов (когда появится поле hidden)
-    const list = [...terminals.value];
+    let list = [...terminals.value];
+    if (!showHidden.value) {
+        list = list.filter(t => !t.settings?.hidden);
+    }
     if (sortMode.value === 'alphabet') {
         return list.sort((a, b) => (a.comment || '').localeCompare(b.comment || '', 'ru'));
     }

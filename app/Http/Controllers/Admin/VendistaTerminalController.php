@@ -12,7 +12,9 @@ class VendistaTerminalController extends Controller
     /** Список терминалов из локальной БД */
     public function index(): JsonResponse
     {
-        $terminals = VendistaTerminal::orderBy('comment')->get();
+        $terminals = VendistaTerminal::with(['settings', 'ingredients'])
+            ->orderBy('comment')
+            ->get();
 
         return response()->json(['terminals' => $terminals]);
     }
@@ -20,6 +22,8 @@ class VendistaTerminalController extends Controller
     /** Один терминал по ID */
     public function show(VendistaTerminal $terminal): JsonResponse
     {
+        $terminal->load(['settings', 'ingredients']);
+
         return response()->json(['terminal' => $terminal]);
     }
 

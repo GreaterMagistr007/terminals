@@ -126,13 +126,21 @@
                     </div>
                 </div>
 
-                <div v-if="terminalIngredients.length" class="mt-3 space-y-1">
+                <div v-if="terminalIngredients.length" ref="ingredientListRef" class="mt-3 space-y-1">
                     <div
                         v-for="ing in terminalIngredients"
                         :key="ing.id"
-                        class="flex items-center justify-between rounded px-2 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                        :data-id="ing.id"
+                        class="flex cursor-grab items-center justify-between rounded px-2 py-1.5 hover:bg-gray-50 active:cursor-grabbing dark:hover:bg-gray-700/50"
                     >
-                        <span class="text-sm text-gray-700 dark:text-gray-300">{{ ing.name }}</span>
+                        <div class="flex items-center gap-2">
+                            <svg class="h-4 w-4 shrink-0 text-gray-300 dark:text-gray-600" fill="currentColor" viewBox="0 0 24 24">
+                                <circle cx="9" cy="5" r="1.5" /><circle cx="15" cy="5" r="1.5" />
+                                <circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
+                                <circle cx="9" cy="19" r="1.5" /><circle cx="15" cy="19" r="1.5" />
+                            </svg>
+                            <span class="text-sm text-gray-700 dark:text-gray-300">{{ ing.name }}</span>
+                        </div>
                         <button
                             @click="removeIngredient(ing.id)"
                             class="flex h-6 w-6 shrink-0 items-center justify-center rounded text-gray-400 hover:bg-gray-200 hover:text-red-500 dark:hover:bg-gray-600 dark:hover:text-red-400 transition-colors"
@@ -205,8 +213,9 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue';
+import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import { useRoute } from 'vue-router';
+import Sortable from 'sortablejs';
 import apiClient from '@/api/client';
 
 const route = useRoute();
@@ -222,6 +231,8 @@ const allIngredients = ref([]);
 const terminalIngredients = ref([]);
 const showIngredientDropdown = ref(false);
 const dropdownRef = ref(null);
+const ingredientListRef = ref(null);
+let sortableInstance = null;
 
 /** Доступные для добавления ингредиенты (ещё не привязанные) */
 const availableIngredients = computed(() => {
@@ -315,6 +326,45 @@ async function removeIngredient(ingredientId) {
         saveError.value = error.response?.data?.message || 'Не удалось убрать ингредиент';
     }
 }
+
+/** Сохранение нового порядка ингредиентов */
+async function saveIngredientOrder() {
+    const ids = terminalIngredients.value.map(i => i.id);
+    try {
+        await apiClient.put(`/admin/points/${terminalId}/ingredients/reorder`, {
+            ingredient_ids: ids,
+        });
+    } catch (error) {
+        saveError.value = error.response?.data?.message || 'Не удалось сохранить порядок';
+    }
+}
+
+/** Инициализация drag-and-drop для ингредиентов */
+function initSortable() {
+    if (sortableInstance) {
+        sortableInstance.destroy();
+        sortableInstance = null;
+    }
+    if (!ingredientListRef.value) return;
+
+    sortableInstance = Sortable.create(ingredientListRef.value, {
+        animation: 150,
+        handle: '.cursor-grab',
+        ghostClass: 'opacity-30',
+        onEnd() {
+            // Считываем новый порядок из DOM
+            const ids = Array.from(ingredientListRef.value.children).map(el => Number(el.dataset.id));
+            terminalIngredients.value = ids.map(id => terminalIngredients.value.find(i => i.id === id));
+            saveIngredientOrder();
+        },
+    });
+}
+
+/** Переинициализация Sortable при изменении списка */
+watch(terminalIngredients, async () => {
+    await nextTick();
+    initSortable();
+});
 
 /** Закрытие выпадающего списка при клике вне */
 function handleClickOutside(event) {
@@ -623,5 +673,9 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
     document.removeEventListener('click', handleClickOutside);
+    if (sortableInstance) {
+        sortableInstance.destroy();
+        sortableInstance = null;
+    }
 });
 </script>

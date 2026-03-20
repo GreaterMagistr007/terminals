@@ -112,16 +112,16 @@
                 <h2 class="mb-1 text-lg font-bold text-gray-900 dark:text-white">Ингредиенты</h2>
                 <p class="mb-5 text-sm text-gray-400 dark:text-gray-500">Укажите количество принесённых и нужных</p>
 
-                <div class="space-y-3">
-                    <div v-for="ing in ingredients" :key="ing.name" class="rounded-2xl bg-white shadow-sm dark:bg-gray-900 overflow-hidden">
+                <p v-if="!ingredients.length" class="text-sm text-gray-400 dark:text-gray-500">
+                    Для этой точки ингредиенты не назначены. Настройте их в админке.
+                </p>
+                <div v-else class="space-y-3">
+                    <div v-for="ing in ingredients" :key="ing.id" class="rounded-2xl bg-white shadow-sm dark:bg-gray-900 overflow-hidden">
                         <!-- Заголовок карточки (всегда виден) -->
                         <button
                             class="flex w-full items-center gap-3 p-4 text-left active:bg-gray-50 dark:active:bg-gray-800 transition-colors"
                             @click="ing.expanded = !ing.expanded"
                         >
-                            <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" :class="ing.bgClass">
-                                <span class="text-base">{{ ing.icon }}</span>
-                            </div>
                             <span class="flex-1 text-sm font-semibold text-gray-800 dark:text-gray-200">{{ ing.name }}</span>
                             <!-- Бейджи со значениями, если есть (видны в свёрнутом состоянии) -->
                             <span v-if="!ing.expanded && (ing.brought || ing.needed)" class="flex items-center gap-1.5 text-xs">
@@ -320,16 +320,18 @@ const totalSteps = 4;
 
 const water = reactive({ main: 0.5, spare: 0.0 });
 
-// TODO: загружать из справочника ингредиентов (Этап 2)
-const ingredients = reactive([
-    { name: 'Кофе', icon: '\u2615', bgClass: 'bg-amber-100 dark:bg-amber-900/30', brought: 0, needed: 0, expanded: false },
-    { name: 'Молоко', icon: '\uD83E\uDD5B', bgClass: 'bg-blue-100 dark:bg-blue-900/30', brought: 0, needed: 0, expanded: false },
-    { name: 'Сахар', icon: '\uD83E\uDDC2', bgClass: 'bg-yellow-100 dark:bg-yellow-900/30', brought: 0, needed: 0, expanded: false },
-    { name: 'Шоколад', icon: '\uD83C\uDF6B', bgClass: 'bg-orange-100 dark:bg-orange-900/30', brought: 0, needed: 0, expanded: false },
-    { name: 'Стаканы', icon: '\uD83E\uDD64', bgClass: 'bg-gray-100 dark:bg-gray-800', brought: 0, needed: 0, expanded: false },
-    { name: 'Крышки', icon: '\u26AB', bgClass: 'bg-gray-100 dark:bg-gray-800', brought: 0, needed: 0, expanded: false },
-    { name: 'Палочки', icon: '\uD83E\uDD62', bgClass: 'bg-green-100 dark:bg-green-900/30', brought: 0, needed: 0, expanded: false },
-]);
+const ingredients = ref([]);
+
+const bgClasses = [
+    'bg-amber-100 dark:bg-amber-900/30',
+    'bg-blue-100 dark:bg-blue-900/30',
+    'bg-yellow-100 dark:bg-yellow-900/30',
+    'bg-orange-100 dark:bg-orange-900/30',
+    'bg-green-100 dark:bg-green-900/30',
+    'bg-purple-100 dark:bg-purple-900/30',
+    'bg-pink-100 dark:bg-pink-900/30',
+    'bg-gray-100 dark:bg-gray-800',
+];
 
 const comment = ref('');
 const isRecording = ref(false);
@@ -356,6 +358,18 @@ async function fetchTerminal() {
     try {
         const { data } = await apiClient.get(`/terminals/${route.params.id}`);
         terminal.value = data.terminal;
+
+        // Инициализация ингредиентов из привязанных к точке (порядок из sort_order)
+        if (data.terminal.ingredients?.length) {
+            ingredients.value = data.terminal.ingredients.map((ing, idx) => ({
+                id: ing.id,
+                name: ing.short_name || ing.name,
+                bgClass: bgClasses[idx % bgClasses.length],
+                brought: 0,
+                needed: 0,
+                expanded: false,
+            }));
+        }
     } catch {
         router.replace('/');
     }

@@ -46,6 +46,7 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         Route::put('/points/{terminal}', [PointController::class, 'update']);
         Route::post('/points/{terminal}/ingredients', [PointController::class, 'addIngredient']);
         Route::delete('/points/{terminal}/ingredients/{ingredient}', [PointController::class, 'removeIngredient']);
+        Route::put('/points/{terminal}/ingredients/reorder', [PointController::class, 'reorderIngredients']);
 
         Route::apiResource('ingredients', IngredientController::class)->except(['show']);
         Route::post('/ingredients/{ingredient}/receipt', [IngredientReceiptController::class, 'store']);

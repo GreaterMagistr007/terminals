@@ -38,9 +38,11 @@ class VendistaTerminal extends Model
         return $this->hasOne(TerminalSetting::class);
     }
 
-    /** Используемые ингредиенты */
+    /** Используемые ингредиенты (в порядке sort_order) */
     public function ingredients(): BelongsToMany
     {
-        return $this->belongsToMany(Ingredient::class, 'terminal_ingredients');
+        return $this->belongsToMany(Ingredient::class, 'terminal_ingredients')
+            ->withPivot('sort_order')
+            ->orderByPivot('sort_order');
     }
 }
