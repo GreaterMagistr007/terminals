@@ -621,12 +621,57 @@ function goBack() {
     }
 }
 
+// Сжатие изображения на клиенте через Canvas
+function compressImage(file, maxWidth = 1920, quality = 0.75) {
+    return new Promise((resolve) => {
+        // Если файл маленький (< 1 МБ) — не сжимаем
+        if (file.size < 1024 * 1024) {
+            resolve(file);
+            return;
+        }
+
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+        img.onload = () => {
+            URL.revokeObjectURL(url);
+            let { width, height } = img;
+            if (width > maxWidth) {
+                height = Math.round(height * (maxWidth / width));
+                width = maxWidth;
+            }
+
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+
+            canvas.toBlob(
+                (blob) => {
+                    const compressed = new File([blob], file.name, {
+                        type: 'image/jpeg',
+                        lastModified: file.lastModified,
+                    });
+                    resolve(compressed);
+                },
+                'image/jpeg',
+                quality,
+            );
+        };
+        img.onerror = () => {
+            URL.revokeObjectURL(url);
+            resolve(file);
+        };
+        img.src = url;
+    });
+}
+
 // Фото: выбор файла
-function onPhotoSelected(event, type) {
+async function onPhotoSelected(event, type) {
     const file = event.target.files?.[0];
     if (!file) return;
-    photos[type] = file;
-    const url = URL.createObjectURL(file);
+    const compressed = await compressImage(file);
+    photos[type] = compressed;
+    const url = URL.createObjectURL(compressed);
     if (type === 'inside') {
         // Освобождаем предыдущий URL
         if (photoInsidePreview.value) URL.revokeObjectURL(photoInsidePreview.value);
@@ -659,12 +704,13 @@ function retakePhoto(type) {
 }
 
 // Фото к комментарию: выбор
-function onCommentPhotosSelected(event) {
+async function onCommentPhotosSelected(event) {
     const files = event.target.files;
     if (!files?.length) return;
     for (const file of files) {
-        commentPhotos.value.push(file);
-        commentPhotoPreviews.value.push(URL.createObjectURL(file));
+        const compressed = await compressImage(file);
+        commentPhotos.value.push(compressed);
+        commentPhotoPreviews.value.push(URL.createObjectURL(compressed));
     }
     // Сброс input для повторного выбора
     event.target.value = '';
@@ -777,8 +823,14 @@ function nextStep() {
     }
 }
 
+// Предупреждение при обновлении/закрытии страницы
+function onBeforeUnloadHandler(e) {
+    e.preventDefault();
+}
+
 // Освобождение Object URL при размонтировании
 onBeforeUnmount(() => {
+    window.removeEventListener('beforeunload', onBeforeUnloadHandler);
     if (photoInsidePreview.value) URL.revokeObjectURL(photoInsidePreview.value);
     if (photoOutsidePreview.value) URL.revokeObjectURL(photoOutsidePreview.value);
     commentPhotoPreviews.value.forEach(url => URL.revokeObjectURL(url));
@@ -786,6 +838,7 @@ onBeforeUnmount(() => {
 });
 
 onMounted(async () => {
+    window.addEventListener('beforeunload', onBeforeUnloadHandler);
     await fetchTerminal();
     if (route.query.edit === 'last') {
         await loadVisitForEdit();
