@@ -39,6 +39,7 @@ return [
         'bot_token' => env('TELEGRAM_BOT_TOKEN'),
         'bot_username' => env('TELEGRAM_BOT_USERNAME'),
         'admin_telegram_id' => env('ADMIN_TELEGRAM_ID'),
+        'group_chat_id' => env('TELEGRAM_GROUP_CHAT_ID'),
     ],
 
     'vendista' => [

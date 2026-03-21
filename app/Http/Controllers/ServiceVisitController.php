@@ -5,12 +5,14 @@ namespace App\Http\Controllers;
 use App\Models\ServiceVisit;
 use App\Models\ServiceVisitIngredient;
 use App\Models\ServiceVisitPhoto;
+use App\Services\TelegramService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
 class ServiceVisitController extends Controller
@@ -121,7 +123,10 @@ class ServiceVisitController extends Controller
         // Ротация старых фотографий
         $this->rotatePhotos($visit->terminal_id);
 
-        $visit->load(['ingredients.ingredient', 'photos', 'user:id,name']);
+        $visit->load(['ingredients.ingredient', 'photos', 'user:id,name', 'terminal']);
+
+        // Уведомление в Telegram-группу (не блокирует ответ)
+        $this->sendTelegramNotification($visit);
 
         return response()->json(['visit' => $visit], 201);
     }
@@ -239,6 +244,123 @@ class ServiceVisitController extends Controller
         $visit->load(['ingredients.ingredient', 'photos', 'user:id,name']);
 
         return response()->json(['visit' => $visit]);
+    }
+
+    /**
+     * Отправка уведомления об обслуживании в Telegram-группу.
+     * Ошибки логируются, но не прерывают основной поток.
+     */
+    private function sendTelegramNotification(ServiceVisit $visit): void
+    {
+        $groupChatId = config('services.telegram.group_chat_id');
+        if (empty($groupChatId)) {
+            return;
+        }
+
+        try {
+            $telegramService = app(TelegramService::class);
+
+            $text = $this->buildNotificationText($visit);
+            $photoUrls = $this->getPhotoUrls($visit);
+
+            if (empty($photoUrls)) {
+                $telegramService->sendMessage($groupChatId, $text);
+                return;
+            }
+
+            if (count($photoUrls) === 1) {
+                $telegramService->sendPhoto($groupChatId, $photoUrls[0], $text);
+                return;
+            }
+
+            // Несколько фото — отправляем группой, caption на первом
+            $media = [];
+            foreach ($photoUrls as $index => $url) {
+                $item = ['type' => 'photo', 'media' => $url];
+                if ($index === 0) {
+                    $item['caption'] = $text;
+                    $item['parse_mode'] = 'HTML';
+                }
+                $media[] = $item;
+            }
+
+            $sent = $telegramService->sendMediaGroup($groupChatId, $media);
+
+            // Если sendMediaGroup не удался (URL недоступен) — отправить только текст
+            if (!$sent) {
+                $telegramService->sendMessage($groupChatId, $text);
+            }
+        } catch (\Throwable $e) {
+            Log::error('Telegram group notification failed', [
+                'visit_id' => $visit->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /** Формирование текста уведомления об обслуживании */
+    private function buildNotificationText(ServiceVisit $visit): string
+    {
+        $terminalName = $visit->terminal->comment ?? "Терминал #{$visit->terminal_id}";
+        $operatorName = $visit->user->name ?? 'Неизвестный';
+        $visitedAt = $visit->visited_at->timezone('Asia/Irkutsk')->format('d.m.Y H:i');
+
+        $lines = [];
+        $lines[] = "<b>{$terminalName}</b>";
+        $lines[] = "{$operatorName}, {$visitedAt}";
+
+        // Вода
+        if ($visit->water_main !== null) {
+            $water = "Вода: осн. {$visit->water_main}";
+            if ($visit->water_spare !== null) {
+                $water .= ", зап. {$visit->water_spare}";
+            }
+            $lines[] = '';
+            $lines[] = $water;
+        }
+
+        // Ингредиенты: принёс
+        $brought = $visit->ingredients->filter(fn ($i) => $i->brought > 0);
+        if ($brought->isNotEmpty()) {
+            $lines[] = '';
+            $lines[] = 'Принёс:';
+            foreach ($brought as $item) {
+                $name = $item->ingredient->short_name ?? $item->ingredient->name;
+                $lines[] = "  {$name} — {$item->brought}";
+            }
+        }
+
+        // Ингредиенты: нужно
+        $needed = $visit->ingredients->filter(fn ($i) => $i->needed > 0);
+        if ($needed->isNotEmpty()) {
+            $lines[] = '';
+            $lines[] = 'Нужно:';
+            foreach ($needed as $item) {
+                $name = $item->ingredient->short_name ?? $item->ingredient->name;
+                $lines[] = "  {$name} — {$item->needed}";
+            }
+        }
+
+        // Комментарий
+        if (!empty($visit->comment)) {
+            $lines[] = '';
+            $lines[] = $visit->comment;
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /** Получение публичных URL фото визита (inside, outside, comment) */
+    private function getPhotoUrls(ServiceVisit $visit): array
+    {
+        $appUrl = rtrim(config('app.url'), '/');
+        $urls = [];
+
+        foreach ($visit->photos as $photo) {
+            $urls[] = $appUrl . '/storage/' . $photo->path;
+        }
+
+        return $urls;
     }
 
     /**

@@ -77,6 +77,61 @@ class TelegramService
         return true;
     }
 
+    /** Отправка фото по URL */
+    public function sendPhoto(string $chatId, string $photoUrl, ?string $caption = null, ?string $parseMode = 'HTML'): bool
+    {
+        $payload = [
+            'chat_id' => $chatId,
+            'photo' => $photoUrl,
+        ];
+
+        if ($caption !== null) {
+            $payload['caption'] = $caption;
+        }
+
+        if ($parseMode !== null) {
+            $payload['parse_mode'] = $parseMode;
+        }
+
+        $response = Http::post("{$this->apiBaseUrl}/sendPhoto", $payload);
+
+        if (!$response->successful()) {
+            Log::error('Telegram sendPhoto failed', [
+                'chat_id' => $chatId,
+                'status' => $response->status(),
+                'body' => $response->body(),
+            ]);
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Отправка группы медиафайлов (до 10 фото).
+     *
+     * @param string $chatId
+     * @param array $media Массив InputMediaPhoto: [['type' => 'photo', 'media' => 'url', 'caption' => '...', 'parse_mode' => 'HTML'], ...]
+     */
+    public function sendMediaGroup(string $chatId, array $media): bool
+    {
+        $response = Http::post("{$this->apiBaseUrl}/sendMediaGroup", [
+            'chat_id' => $chatId,
+            'media' => json_encode($media),
+        ]);
+
+        if (!$response->successful()) {
+            Log::error('Telegram sendMediaGroup failed', [
+                'chat_id' => $chatId,
+                'status' => $response->status(),
+                'body' => $response->body(),
+            ]);
+            return false;
+        }
+
+        return true;
+    }
+
     /** Получение обновлений через long-polling */
     public function getUpdates(int $offset = 0, int $timeout = 30): array
     {

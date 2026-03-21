@@ -51,6 +51,12 @@ class TelegramPoll extends Command
             return;
         }
 
+        // Игнорировать сообщения из групп — бот обрабатывает только личные сообщения
+        $chatType = $message['chat']['type'] ?? 'private';
+        if ($chatType !== 'private') {
+            return;
+        }
+
         $text = $message['text'] ?? '';
         $chatId = (string) $message['chat']['id'];
         $telegramId = (string) $message['from']['id'];
