@@ -309,14 +309,22 @@
                         :class="photos.inside ? 'border-green-300 dark:border-green-700' : 'border-gray-200 dark:border-gray-700'"
                     >
                         <template v-if="!photos.inside">
-                            <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-100 dark:bg-gray-800 mb-3" @click="photoInsideInput.click()">
-                                <svg class="h-7 w-7 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
-                                </svg>
+                            <span class="mb-3 text-sm font-medium text-gray-500 dark:text-gray-400">Фото внутри</span>
+                            <div class="flex gap-3">
+                                <button @click="photoInsideCameraInput.click()" class="flex items-center gap-1.5 rounded-xl bg-gray-100 px-4 py-2.5 text-sm font-medium text-gray-600 active:bg-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:active:bg-gray-700">
+                                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
+                                    </svg>
+                                    Камера
+                                </button>
+                                <button @click="photoInsideGalleryInput.click()" class="flex items-center gap-1.5 rounded-xl bg-gray-100 px-4 py-2.5 text-sm font-medium text-gray-600 active:bg-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:active:bg-gray-700">
+                                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
+                                    </svg>
+                                    Галерея
+                                </button>
                             </div>
-                            <span class="text-sm font-medium text-gray-500 dark:text-gray-400" @click="photoInsideInput.click()">Фото внутри</span>
-                            <span class="mt-1 text-xs text-gray-400 dark:text-gray-500" @click="photoInsideInput.click()">Нажмите для съёмки</span>
                         </template>
                         <template v-else>
                             <img :src="photoInsidePreview" class="h-full w-full object-cover" alt="Фото внутри" />
@@ -329,10 +337,17 @@
                             </div>
                         </template>
                         <input
-                            ref="photoInsideInput"
+                            ref="photoInsideCameraInput"
                             type="file"
                             accept="image/*"
                             capture="environment"
+                            class="hidden"
+                            @change="onPhotoSelected($event, 'inside')"
+                        />
+                        <input
+                            ref="photoInsideGalleryInput"
+                            type="file"
+                            accept="image/*"
                             class="hidden"
                             @change="onPhotoSelected($event, 'inside')"
                         />
@@ -344,14 +359,22 @@
                         :class="photos.outside ? 'border-green-300 dark:border-green-700' : 'border-gray-200 dark:border-gray-700'"
                     >
                         <template v-if="!photos.outside">
-                            <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-100 dark:bg-gray-800 mb-3" @click="photoOutsideInput.click()">
-                                <svg class="h-7 w-7 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
-                                </svg>
+                            <span class="mb-3 text-sm font-medium text-gray-500 dark:text-gray-400">Фото снаружи</span>
+                            <div class="flex gap-3">
+                                <button @click="photoOutsideCameraInput.click()" class="flex items-center gap-1.5 rounded-xl bg-gray-100 px-4 py-2.5 text-sm font-medium text-gray-600 active:bg-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:active:bg-gray-700">
+                                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
+                                    </svg>
+                                    Камера
+                                </button>
+                                <button @click="photoOutsideGalleryInput.click()" class="flex items-center gap-1.5 rounded-xl bg-gray-100 px-4 py-2.5 text-sm font-medium text-gray-600 active:bg-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:active:bg-gray-700">
+                                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
+                                    </svg>
+                                    Галерея
+                                </button>
                             </div>
-                            <span class="text-sm font-medium text-gray-500 dark:text-gray-400" @click="photoOutsideInput.click()">Фото снаружи</span>
-                            <span class="mt-1 text-xs text-gray-400 dark:text-gray-500" @click="photoOutsideInput.click()">Нажмите для съёмки</span>
                         </template>
                         <template v-else>
                             <img :src="photoOutsidePreview" class="h-full w-full object-cover" alt="Фото снаружи" />
@@ -364,10 +387,17 @@
                             </div>
                         </template>
                         <input
-                            ref="photoOutsideInput"
+                            ref="photoOutsideCameraInput"
                             type="file"
                             accept="image/*"
                             capture="environment"
+                            class="hidden"
+                            @change="onPhotoSelected($event, 'outside')"
+                        />
+                        <input
+                            ref="photoOutsideGalleryInput"
+                            type="file"
+                            accept="image/*"
                             class="hidden"
                             @change="onPhotoSelected($event, 'outside')"
                         />
@@ -554,8 +584,10 @@ const photoInsidePreview = ref(null);
 const photoOutsidePreview = ref(null);
 
 // Template refs для file inputs
-const photoInsideInput = ref(null);
-const photoOutsideInput = ref(null);
+const photoInsideCameraInput = ref(null);
+const photoInsideGalleryInput = ref(null);
+const photoOutsideCameraInput = ref(null);
+const photoOutsideGalleryInput = ref(null);
 const commentPhotoInput = ref(null);
 const commentCameraInput = ref(null);
 
@@ -791,12 +823,14 @@ function retakePhoto(type) {
         existingPhotoInside.value = null;
         if (photoInsidePreview.value && !photoInsidePreview.value.startsWith('/')) URL.revokeObjectURL(photoInsidePreview.value);
         photoInsidePreview.value = null;
-        if (photoInsideInput.value) photoInsideInput.value.value = '';
+        if (photoInsideCameraInput.value) photoInsideCameraInput.value.value = '';
+        if (photoInsideGalleryInput.value) photoInsideGalleryInput.value.value = '';
     } else {
         existingPhotoOutside.value = null;
         if (photoOutsidePreview.value && !photoOutsidePreview.value.startsWith('/')) URL.revokeObjectURL(photoOutsidePreview.value);
         photoOutsidePreview.value = null;
-        if (photoOutsideInput.value) photoOutsideInput.value.value = '';
+        if (photoOutsideCameraInput.value) photoOutsideCameraInput.value.value = '';
+        if (photoOutsideGalleryInput.value) photoOutsideGalleryInput.value.value = '';
     }
 }
 
