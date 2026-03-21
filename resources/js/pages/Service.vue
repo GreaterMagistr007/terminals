@@ -491,7 +491,7 @@ function resetSilenceTimer() {
     clearTimeout(silenceTimer);
     silenceTimer = setTimeout(() => {
         recognition?.stop();
-    }, 2500);
+    }, 3000);
 }
 
 function toggleSpeech() {
@@ -505,35 +505,25 @@ function toggleSpeech() {
     recognition = new SpeechRecognition();
     recognition.lang = 'ru-RU';
     recognition.continuous = true;
-    recognition.interimResults = true;
+    recognition.interimResults = false;
 
-    let finalTranscript = '';
+    let fullTranscript = '';
 
     recognition.onresult = (event) => {
-        let interim = '';
         for (let i = event.resultIndex; i < event.results.length; i++) {
-            const text = event.results[i][0].transcript;
             if (event.results[i].isFinal) {
-                finalTranscript += text;
-                resetSilenceTimer();
-            } else {
-                interim += text;
+                fullTranscript += event.results[i][0].transcript;
                 resetSilenceTimer();
             }
         }
-        // Показываем финальный + промежуточный текст в реальном времени
-        const base = comment.value.slice(0, comment.value.length - (recognition._lastInterimLength || 0));
-        const addition = (finalTranscript + interim).trim();
-        recognition._lastInterimLength = addition.length > 0 ? (addition.length + (base ? 1 : 0)) : 0;
-        comment.value = addition ? (base ? base + ' ' + addition : addition) : base;
     };
 
     recognition.onend = () => {
         clearTimeout(silenceTimer);
-        // Убираем промежуточный текст, оставляем только финальный
-        const base = comment.value.slice(0, comment.value.length - (recognition._lastInterimLength || 0));
-        const addition = finalTranscript.trim();
-        comment.value = addition ? (base ? base + ' ' + addition : addition) : base;
+        const text = fullTranscript.trim();
+        if (text) {
+            comment.value += (comment.value ? ' ' : '') + text;
+        }
         isRecording.value = false;
         recognition = null;
     };
@@ -547,10 +537,8 @@ function toggleSpeech() {
         recognition = null;
     };
 
-    recognition._lastInterimLength = 0;
     recognition.start();
     isRecording.value = true;
-    resetSilenceTimer();
 }
 const showExitModal = ref(false);
 const neededDismissed = ref(false);
