@@ -225,16 +225,6 @@
                     <p v-else class="mt-2 text-xs text-gray-400 dark:text-gray-500">Нажмите на микрофон для голосового ввода</p>
                 </div>
 
-                <div class="mt-4">
-                    <p class="mb-2 text-xs font-semibold text-gray-400 uppercase tracking-wider dark:text-gray-500">Шаблоны</p>
-                    <div class="flex flex-wrap gap-2">
-                        <button v-for="tmpl in templates" :key="tmpl"
-                            class="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-600 active:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400 dark:active:bg-gray-800 transition-colors"
-                            @click="comment += (comment ? ' ' : '') + tmpl"
-                        >{{ tmpl }}</button>
-                    </div>
-                </div>
-
                 <!-- Прикреплённые фото к комментарию -->
                 <div class="mt-6">
                     <p class="mb-3 text-xs font-semibold text-gray-400 uppercase tracking-wider dark:text-gray-500">Прикрепить фото</p>
@@ -488,7 +478,6 @@ const ingredients = ref([]);
 
 const comment = ref('');
 const isRecording = ref(false);
-const templates = ['Всё в норме', 'Требуется ремонт', 'Протечка воды', 'Нужна чистка', 'Аппарат отключён'];
 const showExitModal = ref(false);
 const neededDismissed = ref(false);
 const saving = ref(false);
