@@ -460,6 +460,8 @@ function nowIrkutsk() {
 
 const visitedAt = ref(nowIrkutsk());
 
+const BOTTLE_VOLUME_ML = 18900;
+const WATER_PER_CUP_ML = 340;
 const water = reactive({ main: 0.5, spare: 0.0 });
 
 const ingredients = ref([]);
@@ -535,6 +537,25 @@ async function fetchTerminal() {
                     name: i.ingredient?.short_name || i.ingredient?.name || 'Ингредиент',
                     qty: i.needed,
                 }));
+        }
+
+        // Расчётный уровень воды (та же логика, что на Home.vue)
+        const lv = data.terminal.latest_visit;
+        if (lv) {
+            const mainMl = (lv.water_main ?? 0) * BOTTLE_VOLUME_ML;
+            const spareMl = (lv.water_spare ?? 0) * BOTTLE_VOLUME_ML;
+            const usedMl = (data.terminal.sales_since_last_visit ?? 0) * WATER_PER_CUP_ML;
+
+            let remainingMain = mainMl - usedMl;
+            let remainingSpare = spareMl;
+
+            if (remainingMain < 0) {
+                remainingSpare = Math.max(0, spareMl + remainingMain);
+                remainingMain = 0;
+            }
+
+            water.main = Math.round(Math.min(1, Math.max(0, remainingMain / BOTTLE_VOLUME_ML)) * 10) / 10;
+            water.spare = Math.round(Math.min(1, Math.max(0, remainingSpare / BOTTLE_VOLUME_ML)) * 10) / 10;
         }
     } catch {
         router.replace('/');
