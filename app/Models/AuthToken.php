@@ -45,10 +45,10 @@ class AuthToken extends Model
     }
 
     /** Создание нового токена */
-    public static function generate(string $type, ?int $userId = null, ?string $telegramId = null): self
+    public static function generate(string $type, ?int $userId = null, ?string $telegramId = null, int $tokenLength = 64): self
     {
         return self::create([
-            'token' => Str::random(64),
+            'token' => Str::random($tokenLength),
             'type' => $type,
             'user_id' => $userId,
             'telegram_id' => $telegramId,

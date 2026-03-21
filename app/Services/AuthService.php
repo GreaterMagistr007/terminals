@@ -181,7 +181,8 @@ class AuthService
     /** Создание инвайт-токена для пользователя (вызывается админом) */
     public function createInvite(User $user): AuthToken
     {
-        return AuthToken::generate(AuthToken::TYPE_INVITE, $user->id);
+        // Лимит Telegram deep link: 64 символа. invite_ (7) + 50 = 57
+        return AuthToken::generate(AuthToken::TYPE_INVITE, $user->id, null, 50);
     }
 
     /** Найти существующего или создать нового пользователя по telegram_id */
