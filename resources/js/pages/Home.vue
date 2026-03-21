@@ -202,6 +202,48 @@ import { getAllDrafts } from '@/services/offlineDb';
 
 const router = useRouter();
 const offlineQueueStore = useOfflineQueueStore();
+
+// Защита от системной кнопки "Назад" на Android.
+// Navigation API перехватывает навигацию ДО её выполнения (в отличие от popstate).
+// Блокируем только traverse-навигацию (кнопки Назад/Вперёд браузера/системы).
+// Программная навигация (router.push, router-link) имеет тип push — не блокируется.
+function onNavigate(e) {
+    if (e.navigationType === 'traverse' && e.canIntercept) {
+        e.preventDefault();
+    }
+}
+
+// Fallback для браузеров без Navigation API
+let ignoreNextPopState = false;
+function onPopState(e) {
+    if (ignoreNextPopState) {
+        ignoreNextPopState = false;
+        e.stopImmediatePropagation();
+        return;
+    }
+    e.stopImmediatePropagation();
+    ignoreNextPopState = true;
+    window.history.go(1);
+}
+
+const hasNavigationApi = typeof window !== 'undefined' && 'navigation' in window;
+
+onMounted(() => {
+    if (hasNavigationApi) {
+        window.navigation.addEventListener('navigate', onNavigate);
+    } else {
+        window.history.pushState({ ...window.history.state }, '', '/');
+        window.addEventListener('popstate', onPopState, true);
+    }
+});
+
+onBeforeUnmount(() => {
+    if (hasNavigationApi) {
+        window.navigation.removeEventListener('navigate', onNavigate);
+    } else {
+        window.removeEventListener('popstate', onPopState, true);
+    }
+});
 const terminalsStore = useTerminalsStore();
 const draftTerminalIds = ref(new Set());
 
