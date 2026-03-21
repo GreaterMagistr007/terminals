@@ -300,6 +300,10 @@ const pendingVisitsSuffix = computed(() => {
 });
 
 async function fetchTerminals() {
+    // Если в store уже есть данные (из кеша) — показать сразу
+    if (terminalsStore.terminals.length) {
+        loading.value = false;
+    }
     await terminalsStore.fetch();
     loading.value = false;
 }

@@ -1,6 +1,6 @@
 /**
  * Pinia store для данных терминалов.
- * Хранит список терминалов в памяти + localStorage для офлайн-доступа.
+ * Стратегия: сначала кеш (localStorage), потом обновление с сервера в фоне.
  */
 import { defineStore } from 'pinia';
 import apiClient from '@/api/client';
@@ -21,8 +21,14 @@ export const useTerminalsStore = defineStore('terminals', {
     },
 
     actions: {
-        /** Загрузить терминалы (API с fallback на localStorage) */
+        /** Загрузить терминалы: мгновенно из кеша, затем обновить с сервера */
         async fetch() {
+            // Сначала показать кеш (мгновенно)
+            if (!this.terminals.length) {
+                this._loadFromStorage();
+            }
+
+            // Потом попробовать обновить с сервера
             try {
                 const { data } = await apiClient.get('/terminals');
                 if (data.terminals) {
@@ -31,10 +37,8 @@ export const useTerminalsStore = defineStore('terminals', {
                     this._saveToStorage();
                 }
             } catch {
-                // При ошибке сети — восстановить из localStorage
-                if (!this.terminals.length) {
-                    this._loadFromStorage();
-                }
+                // Нет сети — данные уже из кеша
+                this.loaded = true;
             }
         },
 
@@ -48,24 +52,33 @@ export const useTerminalsStore = defineStore('terminals', {
             return data;
         },
 
-        /** Обновить данные конкретного терминала (для Service.vue) */
+        /** Данные конкретного терминала: из кеша или с сервера */
         async fetchOne(id) {
-            try {
-                const { data } = await apiClient.get(`/terminals/${id}`);
-                if (data.terminal) {
-                    // Обновить в общем списке
-                    const idx = this.terminals.findIndex(t => t.id === data.terminal.id);
-                    if (idx !== -1) {
-                        this.terminals[idx] = { ...this.terminals[idx], ...data.terminal };
-                    }
-                    this._saveToStorage();
-                    return data.terminal;
-                }
-            } catch {
-                // Вернуть из кеша
-                return this.getById(id);
+            // Сначала из кеша в памяти
+            if (!this.terminals.length) {
+                this._loadFromStorage();
             }
-            return null;
+
+            const cached = this.getById(id);
+
+            // Попробовать обновить с сервера (не блокируя если есть кеш)
+            if (navigator.onLine) {
+                try {
+                    const { data } = await apiClient.get(`/terminals/${id}`);
+                    if (data.terminal) {
+                        const idx = this.terminals.findIndex(t => t.id === data.terminal.id);
+                        if (idx !== -1) {
+                            this.terminals[idx] = { ...this.terminals[idx], ...data.terminal };
+                        }
+                        this._saveToStorage();
+                        return data.terminal;
+                    }
+                } catch {
+                    // Ошибка сети — вернём кеш
+                }
+            }
+
+            return cached;
         },
 
         _saveToStorage() {

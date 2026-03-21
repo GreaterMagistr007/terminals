@@ -96,11 +96,18 @@ function loadFromCache() {
 }
 
 async function fetchSales() {
+    // Сначала показать кеш (мгновенно)
+    loadFromCache();
+    if (sales.value.length) {
+        loading.value = false;
+    }
+
+    // Потом обновить с сервера
     try {
         const { data } = await apiClient.get('/sales/today');
         applyData(data);
     } catch {
-        loadFromCache();
+        // Нет сети — данные уже из кеша
     } finally {
         loading.value = false;
     }
