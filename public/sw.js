@@ -1,30 +1,41 @@
-const CACHE_NAME = 'terminals-v2';
+const CACHE_NAME = 'terminals-v3';
 const API_CACHE_NAME = 'terminals-api-v1';
 
-// Прекеширование: загрузить HTML-оболочку и все её ассеты
+/**
+ * Прекеширование: HTML-оболочка + все Vite-ассеты из манифеста.
+ * Манифест генерируется Vite при сборке и содержит точные пути всех JS/CSS.
+ */
 async function precacheAppShell() {
     const cache = await caches.open(CACHE_NAME);
 
-    // Загрузить HTML-оболочку
-    const response = await fetch('/');
-    await cache.put('/', response.clone());
+    // HTML-оболочка SPA
+    const htmlResponse = await fetch('/');
+    await cache.put('/', htmlResponse);
 
-    // Извлечь URL ассетов из HTML
-    const html = await response.text();
-    const urls = [];
-    const regex = /(?:src|href)="(\/build\/assets\/[^"]+)"/g;
-    let match;
-    while ((match = regex.exec(html)) !== null) {
-        urls.push(match[1]);
+    // Все Vite-ассеты из build-манифеста
+    try {
+        const manifestResponse = await fetch('/build/manifest.json');
+        const manifest = await manifestResponse.json();
+        const urls = new Set();
+
+        for (const entry of Object.values(manifest)) {
+            if (entry.file) urls.add('/build/' + entry.file);
+            if (entry.css) entry.css.forEach((f) => urls.add('/build/' + f));
+        }
+
+        // Статические ресурсы
+        urls.add('/manifest.json');
+        urls.add('/favicon.ico');
+
+        await Promise.all(
+            [...urls].map((url) => cache.add(url).catch(() => {}))
+        );
+    } catch {
+        // Манифест недоступен — кешируем только HTML
     }
-
-    // Также закешировать manifest и иконки
-    urls.push('/manifest.json', '/favicon.ico');
-
-    await Promise.all(urls.map((url) => cache.add(url).catch(() => {})));
 }
 
-// Установка: прекеширование app shell с ассетами
+// Установка: прекешируем app shell + все ассеты
 self.addEventListener('install', (event) => {
     event.waitUntil(precacheAppShell());
     self.skipWaiting();
@@ -45,52 +56,30 @@ self.addEventListener('activate', (event) => {
     self.clients.claim();
 });
 
-// Обновление кеша ассетов по запросу из приложения (fallback)
-self.addEventListener('message', (event) => {
-    if (event.data?.type === 'CACHE_ASSETS' && Array.isArray(event.data.urls)) {
-        event.waitUntil(
-            caches.open(CACHE_NAME).then((cache) =>
-                Promise.all(
-                    event.data.urls.map((url) =>
-                        cache.match(url).then((cached) => {
-                            if (!cached) return cache.add(url).catch(() => {});
-                        })
-                    )
-                )
-            )
-        );
-    }
-});
-
 // Стратегии кеширования по типу запроса
 self.addEventListener('fetch', (event) => {
     const { request } = event;
     const url = new URL(request.url);
 
-    // Игнорируем не-HTTP запросы (chrome-extension://, etc.)
     if (!url.protocol.startsWith('http')) {
         return;
     }
 
     // API-запросы
     if (url.pathname.startsWith('/api/')) {
-        // POST/PUT/DELETE -- Network Only, при ошибке -- 503
         if (request.method !== 'GET') {
             event.respondWith(
                 fetch(request).catch(() =>
                     new Response(
                         JSON.stringify({ error: 'offline' }),
-                        {
-                            status: 503,
-                            headers: { 'Content-Type': 'application/json' },
-                        }
+                        { status: 503, headers: { 'Content-Type': 'application/json' } }
                     )
                 )
             );
             return;
         }
 
-        // GET -- Network First с кешем
+        // GET — Network First + кеш
         event.respondWith(
             fetch(request)
                 .then((response) => {
@@ -105,10 +94,7 @@ self.addEventListener('fetch', (event) => {
                         if (cached) return cached;
                         return new Response(
                             JSON.stringify({ error: 'offline' }),
-                            {
-                                status: 503,
-                                headers: { 'Content-Type': 'application/json' },
-                            }
+                            { status: 503, headers: { 'Content-Type': 'application/json' } }
                         );
                     })
                 )
@@ -116,7 +102,7 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // Навигация (HTML): Network First, fallback на кешированную SPA-оболочку
+    // Навигация (HTML): Network First, fallback на SPA-оболочку
     if (request.mode === 'navigate') {
         event.respondWith(
             fetch(request)
@@ -130,13 +116,11 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // Статика с хешем (Vite build assets): Cache First
-    if (url.pathname.startsWith('/build/assets/')) {
+    // Vite build assets: Cache First
+    if (url.pathname.startsWith('/build/')) {
         event.respondWith(
             caches.match(request).then((cached) => {
-                if (cached) {
-                    return cached;
-                }
+                if (cached) return cached;
                 return fetch(request).then((response) => {
                     if (response.ok) {
                         const clone = response.clone();
