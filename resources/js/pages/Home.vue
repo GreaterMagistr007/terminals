@@ -50,6 +50,16 @@
             </div>
         </div>
 
+        <!-- Баннер ожидающих отправки визитов -->
+        <div v-if="offlineQueueStore.pendingCount > 0" class="mb-4 flex items-center gap-2 rounded-xl bg-amber-50 px-4 py-3 dark:bg-amber-900/20">
+            <svg class="h-5 w-5 shrink-0 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span class="text-sm font-medium text-amber-700 dark:text-amber-400">
+                Ожидает отправки: {{ offlineQueueStore.pendingCount }} визит{{ pendingVisitsSuffix }}
+            </span>
+        </div>
+
         <!-- Загрузка -->
         <p v-if="loading" class="text-center text-sm text-gray-400 dark:text-gray-500">Загрузка...</p>
 
@@ -183,8 +193,12 @@
 import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue';
 import { useRouter } from 'vue-router';
 import apiClient from '@/api/client';
+import { useOfflineQueueStore } from '@/stores/offlineQueue';
+import { useTerminalsStore } from '@/stores/terminals';
 
 const router = useRouter();
+const offlineQueueStore = useOfflineQueueStore();
+const terminalsStore = useTerminalsStore();
 
 const IRKUTSK_TZ = 'Asia/Irkutsk';
 const SETTINGS_KEY = 'terminals_home_settings';
@@ -217,7 +231,7 @@ function estimatedWater(terminal) {
     };
 }
 
-const terminals = ref([]);
+const terminals = computed(() => terminalsStore.terminals);
 const loading = ref(true);
 const refreshing = ref(false);
 const expandedId = ref(null);
@@ -272,20 +286,30 @@ function goToEditVisit() {
     router.push({ name: 'service', params: { id: editModal.terminalId }, query: { edit: 'last' } });
 }
 
+/**
+ * Склонение слова "визит" для баннера ожидающих.
+ */
+const pendingVisitsSuffix = computed(() => {
+    const n = offlineQueueStore.pendingCount;
+    const abs = Math.abs(n) % 100;
+    const last = abs % 10;
+    if (abs > 10 && abs < 20) return 'ов';
+    if (last === 1) return '';
+    if (last >= 2 && last <= 4) return 'а';
+    return 'ов';
+});
+
 async function fetchTerminals() {
-    try {
-        const { data } = await apiClient.get('/terminals');
-        terminals.value = data.terminals;
-    } finally {
-        loading.value = false;
-    }
+    await terminalsStore.fetch();
+    loading.value = false;
 }
 
 async function refreshTerminals() {
     refreshing.value = true;
     try {
-        const { data } = await apiClient.post('/terminals/refresh');
-        terminals.value = data.terminals;
+        await terminalsStore.refresh();
+    } catch {
+        // Ошибка сети — данные остаются из кеша
     } finally {
         refreshing.value = false;
     }

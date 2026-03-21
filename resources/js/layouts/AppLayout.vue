@@ -1,11 +1,31 @@
 <template>
     <div class="flex min-h-screen flex-col bg-gray-50 dark:bg-gray-950">
+        <!-- Тост-уведомление -->
+        <Transition
+            enter-active-class="transition duration-300 ease-out"
+            enter-from-class="translate-y-[-100%] opacity-0"
+            enter-to-class="translate-y-0 opacity-100"
+            leave-active-class="transition duration-200 ease-in"
+            leave-from-class="translate-y-0 opacity-100"
+            leave-to-class="translate-y-[-100%] opacity-0"
+        >
+            <div v-if="toast.visible" class="fixed inset-x-0 top-0 z-50 px-4 pt-4">
+                <div class="rounded-xl bg-green-500 px-4 py-3 text-sm font-medium text-white shadow-lg">
+                    {{ toast.message }}
+                </div>
+            </div>
+        </Transition>
+
         <!-- Хедер -->
         <header class="bg-white shadow dark:bg-gray-800">
             <div class="flex h-12 items-center justify-between px-4">
                 <router-link to="/" class="text-lg font-bold text-gray-900 dark:text-white">Terminals</router-link>
                 <div class="flex items-center gap-3">
-                    <span class="text-xs text-gray-500 dark:text-gray-400">онлайн</span>
+                    <span v-if="isOnline" class="text-xs text-gray-500 dark:text-gray-400">онлайн</span>
+                    <span v-else class="flex items-center gap-1 text-xs font-medium text-red-500 dark:text-red-400">
+                        <span class="inline-block h-2 w-2 rounded-full bg-red-500 animate-pulse"></span>
+                        офлайн
+                    </span>
                     <button @click="showMenu = !showMenu" class="h-8 w-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm font-medium">
                         {{ initials }}
                     </button>
@@ -56,15 +76,32 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
+import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
+import { useOfflineQueueStore } from '@/stores/offlineQueue';
+import { useTerminalsStore } from '@/stores/terminals';
+import { useOnlineStatus } from '@/composables/useOnlineStatus';
 import apiClient from '@/api/client';
 
 const router = useRouter();
 const route = useRoute();
 const authStore = useAuthStore();
+const offlineQueueStore = useOfflineQueueStore();
+const terminalsStore = useTerminalsStore();
+const { isOnline } = useOnlineStatus();
 const showMenu = ref(false);
+
+// Тост для уведомлений о синхронизации
+const toast = reactive({ visible: false, message: '' });
+let toastTimer = null;
+
+function showToast(message) {
+    toast.visible = true;
+    toast.message = message;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { toast.visible = false; }, 3000);
+}
 
 const initials = computed(() => {
     const name = authStore.user?.name || '';
@@ -77,22 +114,51 @@ async function logout() {
     router.replace('/login');
 }
 
+// Синхронизация offline-очереди
+async function syncOfflineQueue() {
+    if (!navigator.onLine || offlineQueueStore.pendingCount === 0) return;
+    const sent = await offlineQueueStore.syncAll();
+    if (sent > 0) {
+        showToast(`Отправлено визитов: ${sent}`);
+        // Обновить данные на страницах
+        document.dispatchEvent(new CustomEvent('vendista:updated'));
+    }
+}
+
 // Фоновое обновление транзакций раз в минуту
 const FETCH_INTERVAL_MS = 60_000;
 let fetchIntervalId = null;
 
 function backgroundFetch() {
+    // Фоновые запросы только при наличии сети
+    if (!navigator.onLine) return;
+
     apiClient.post('/vendista/transactions/fetch')
         .then(() => document.dispatchEvent(new CustomEvent('vendista:updated')))
         .catch(() => {});
+
+    // Попытка синхронизации offline-очереди
+    syncOfflineQueue();
+}
+
+// Слушатель появления сети
+function onOnline() {
+    syncOfflineQueue();
 }
 
 onMounted(() => {
+    offlineQueueStore.loadCount();
+    terminalsStore.fetch();
+
     backgroundFetch();
     fetchIntervalId = setInterval(backgroundFetch, FETCH_INTERVAL_MS);
+
+    window.addEventListener('online', onOnline);
 });
 
 onBeforeUnmount(() => {
     if (fetchIntervalId) clearInterval(fetchIntervalId);
+    window.removeEventListener('online', onOnline);
+    clearTimeout(toastTimer);
 });
 </script>

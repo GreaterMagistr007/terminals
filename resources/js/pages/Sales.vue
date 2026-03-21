@@ -51,6 +51,8 @@
 import { ref, onMounted, onBeforeUnmount } from 'vue';
 import apiClient from '@/api/client';
 
+const CACHE_KEY = 'sales-cache';
+
 const sales = ref([]);
 const totals = ref(null);
 const formattedDate = ref('');
@@ -78,12 +80,27 @@ function applyData(data) {
         const d = new Date(data.date + 'T00:00:00');
         formattedDate.value = d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
     }
+    try {
+        localStorage.setItem(CACHE_KEY, JSON.stringify({ sales: data.sales, totals: data.totals, date: data.date }));
+    } catch { /* переполнение — игнорируем */ }
+}
+
+function loadFromCache() {
+    try {
+        const cached = localStorage.getItem(CACHE_KEY);
+        if (cached) {
+            const data = JSON.parse(cached);
+            applyData(data);
+        }
+    } catch { /* повреждённые данные */ }
 }
 
 async function fetchSales() {
     try {
         const { data } = await apiClient.get('/sales/today');
         applyData(data);
+    } catch {
+        loadFromCache();
     } finally {
         loading.value = false;
     }
@@ -94,6 +111,8 @@ async function refreshSales() {
     try {
         const { data } = await apiClient.post('/sales/refresh');
         applyData(data);
+    } catch {
+        // Нет сети — данные остаются из кеша
     } finally {
         refreshing.value = false;
     }

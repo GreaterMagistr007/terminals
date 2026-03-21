@@ -428,9 +428,13 @@
 import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import apiClient from '@/api/client';
+import { useOfflineQueueStore } from '@/stores/offlineQueue';
+import { useTerminalsStore } from '@/stores/terminals';
 
 const router = useRouter();
 const route = useRoute();
+const offlineQueueStore = useOfflineQueueStore();
+const terminalsStore = useTerminalsStore();
 
 const terminal = ref(null);
 const currentStep = ref(1);
@@ -594,51 +598,54 @@ const neededItemsText = computed(() => {
 });
 
 async function fetchTerminal() {
-    try {
-        const { data } = await apiClient.get(`/terminals/${route.params.id}`);
-        terminal.value = data.terminal;
+    // Попытка загрузить с сервера, при ошибке — из store (кеш)
+    let terminalData = await terminalsStore.fetchOne(route.params.id);
 
-        // Инициализация ингредиентов из привязанных к точке (порядок из sort_order)
-        if (data.terminal.ingredients?.length) {
-            ingredients.value = data.terminal.ingredients.map((ing) => ({
-                id: ing.id,
-                name: ing.short_name || ing.name,
-                brought: 0,
-                needed: 0,
-                expanded: false,
-            }));
-        }
-
-        // Нужные ингредиенты из последнего визита
-        if (data.terminal.latest_visit?.ingredients?.length) {
-            neededItems.value = data.terminal.latest_visit.ingredients
-                .filter(i => i.needed > 0)
-                .map(i => ({
-                    name: i.ingredient?.short_name || i.ingredient?.name || 'Ингредиент',
-                    qty: i.needed,
-                }));
-        }
-
-        // Расчётный уровень воды (та же логика, что на Home.vue)
-        const lv = data.terminal.latest_visit;
-        if (lv) {
-            const mainMl = (lv.water_main ?? 0) * BOTTLE_VOLUME_ML;
-            const spareMl = (lv.water_spare ?? 0) * BOTTLE_VOLUME_ML;
-            const usedMl = (data.terminal.sales_since_last_visit ?? 0) * WATER_PER_CUP_ML;
-
-            let remainingMain = mainMl - usedMl;
-            let remainingSpare = spareMl;
-
-            if (remainingMain < 0) {
-                remainingSpare = Math.max(0, spareMl + remainingMain);
-                remainingMain = 0;
-            }
-
-            water.main = Math.round(Math.min(1, Math.max(0, remainingMain / BOTTLE_VOLUME_ML)) * 10) / 10;
-            water.spare = Math.round(Math.min(1, Math.max(0, remainingSpare / BOTTLE_VOLUME_ML)) * 10) / 10;
-        }
-    } catch {
+    if (!terminalData) {
         router.replace('/');
+        return;
+    }
+
+    terminal.value = terminalData;
+
+    // Инициализация ингредиентов из привязанных к точке (порядок из sort_order)
+    if (terminalData.ingredients?.length) {
+        ingredients.value = terminalData.ingredients.map((ing) => ({
+            id: ing.id,
+            name: ing.short_name || ing.name,
+            brought: 0,
+            needed: 0,
+            expanded: false,
+        }));
+    }
+
+    // Нужные ингредиенты из последнего визита
+    if (terminalData.latest_visit?.ingredients?.length) {
+        neededItems.value = terminalData.latest_visit.ingredients
+            .filter(i => i.needed > 0)
+            .map(i => ({
+                name: i.ingredient?.short_name || i.ingredient?.name || 'Ингредиент',
+                qty: i.needed,
+            }));
+    }
+
+    // Расчётный уровень воды (та же логика, что на Home.vue)
+    const lv = terminalData.latest_visit;
+    if (lv) {
+        const mainMl = (lv.water_main ?? 0) * BOTTLE_VOLUME_ML;
+        const spareMl = (lv.water_spare ?? 0) * BOTTLE_VOLUME_ML;
+        const usedMl = (terminalData.sales_since_last_visit ?? 0) * WATER_PER_CUP_ML;
+
+        let remainingMain = mainMl - usedMl;
+        let remainingSpare = spareMl;
+
+        if (remainingMain < 0) {
+            remainingSpare = Math.max(0, spareMl + remainingMain);
+            remainingMain = 0;
+        }
+
+        water.main = Math.round(Math.min(1, Math.max(0, remainingMain / BOTTLE_VOLUME_ML)) * 10) / 10;
+        water.spare = Math.round(Math.min(1, Math.max(0, remainingSpare / BOTTLE_VOLUME_ML)) * 10) / 10;
     }
 }
 
@@ -846,6 +853,40 @@ function requestGeolocation() {
     );
 }
 
+/**
+ * Подготовить данные визита в виде plain-объекта (для offline-сохранения).
+ */
+function buildVisitData() {
+    return {
+        terminalId: Number(route.params.id),
+        terminalName: terminal.value?.comment || '',
+        visitedAt: visitedAt.value,
+        waterMain: usesWater.value ? water.main : null,
+        waterSpare: usesWater.value ? water.spare : null,
+        usesWater: usesWater.value,
+        comment: comment.value,
+        latitude: coords.value.latitude,
+        longitude: coords.value.longitude,
+        ingredients: ingredients.value
+            .filter(ing => ing.brought > 0 || ing.needed > 0)
+            .map(ing => ({
+                ingredient_id: ing.id,
+                brought: ing.brought,
+                needed: ing.needed,
+            })),
+        photos: {
+            inside: (photos.inside && photos.inside !== 'existing') ? photos.inside : null,
+            outside: (photos.outside && photos.outside !== 'existing') ? photos.outside : null,
+            comment: [...commentPhotos.value],
+        },
+        photoNames: {
+            inside: (photos.inside && photos.inside !== 'existing') ? photos.inside.name : null,
+            outside: (photos.outside && photos.outside !== 'existing') ? photos.outside.name : null,
+            comment: commentPhotos.value.map(f => f.name),
+        },
+    };
+}
+
 // Сохранение визита
 async function saveVisit() {
     saving.value = true;
@@ -892,7 +933,7 @@ async function saveVisit() {
             if (removedPhotoIds.value.length) {
                 formData.append('remove_photo_ids', JSON.stringify(removedPhotoIds.value));
             }
-            // Laravel не поддерживает PUT с FormData напрямую — используем POST + _method
+            // Laravel не поддерживает PUT с FormData напрямую -- используем POST + _method
             formData.append('_method', 'PUT');
             await apiClient.post(`/service-visits/${editingVisitId.value}`, formData, {
                 headers: { 'Content-Type': 'multipart/form-data' },
@@ -907,6 +948,28 @@ async function saveVisit() {
 
         router.push('/');
     } catch (error) {
+        // Сетевая ошибка (нет response) или браузер offline -- сохранить в очередь
+        if (!error.response || !navigator.onLine) {
+            // Редактирование недоступно в offline-режиме
+            if (isEditMode.value) {
+                showToast('error', 'Редактирование недоступно без интернета');
+                saving.value = false;
+                return;
+            }
+
+            try {
+                const visitData = buildVisitData();
+                await offlineQueueStore.enqueue(visitData);
+                showToast('success', 'Нет интернета, но данные сохранены. Отправлю как появится интернет');
+                setTimeout(() => router.push('/'), 2000);
+                return;
+            } catch {
+                showToast('error', 'Не удалось сохранить данные локально');
+                saving.value = false;
+                return;
+            }
+        }
+
         const message = error.response?.data?.message
             || error.response?.data?.errors && Object.values(error.response.data.errors).flat().join(', ')
             || 'Ошибка при сохранении';
