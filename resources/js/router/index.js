@@ -1,6 +1,11 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import AppLayout from '@/layouts/AppLayout.vue';
+import Home from '@/pages/Home.vue';
+import Service from '@/pages/Service.vue';
+import ServiceHistory from '@/pages/ServiceHistory.vue';
+import Sales from '@/pages/Sales.vue';
+import Login from '@/pages/Login.vue';
 
 const routes = [
     {
@@ -96,7 +101,7 @@ const routes = [
     {
         path: '/login',
         name: 'login',
-        component: () => import('@/pages/Login.vue'),
+        component: Login,
         meta: { guest: true },
     },
     {
@@ -108,7 +113,7 @@ const routes = [
     {
         path: '/service/:id',
         name: 'service',
-        component: () => import('@/pages/Service.vue'),
+        component: Service,
         meta: { auth: true },
     },
     {
@@ -119,17 +124,17 @@ const routes = [
             {
                 path: '',
                 name: 'home',
-                component: () => import('@/pages/Home.vue'),
+                component: Home,
             },
             {
                 path: 'history/:id',
                 name: 'history',
-                component: () => import('@/pages/ServiceHistory.vue'),
+                component: ServiceHistory,
             },
             {
                 path: 'sales',
                 name: 'sales',
-                component: () => import('@/pages/Sales.vue'),
+                component: Sales,
             },
         ],
     },
@@ -208,6 +213,14 @@ router.beforeEach(async (to) => {
     // Админские страницы: если не админ — редирект на главную
     if (to.meta.admin && !authStore.isAdmin) {
         return { name: 'home' };
+    }
+});
+
+// Ошибка загрузки lazy-чанка (офлайн, админка) — не ломать приложение
+router.onError((error, to) => {
+    if (error.message?.includes('Failed to fetch dynamically imported module') ||
+        error.message?.includes('Importing a module script failed')) {
+        router.push({ name: 'home' });
     }
 });
 
