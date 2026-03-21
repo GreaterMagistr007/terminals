@@ -1,19 +1,17 @@
 /**
- * IndexedDB обертка для хранения визитов в режиме offline.
- * БД: terminals-offline, версия 1.
- * Object store: pendingVisits (keyPath: id).
+ * IndexedDB обертка для хранения визитов и черновиков в режиме offline.
+ * БД: terminals-offline, версия 2.
+ * Object stores: pendingVisits (отложенные визиты), visitDrafts (черновики обслуживания).
  */
 
 const DB_NAME = 'terminals-offline';
-const DB_VERSION = 1;
-const STORE_NAME = 'pendingVisits';
+const DB_VERSION = 2;
+const STORE_PENDING = 'pendingVisits';
+const STORE_DRAFTS = 'visitDrafts';
 
 let dbPromise = null;
 
-/**
- * Открыть/создать БД (синглтон).
- * @returns {Promise<IDBDatabase>}
- */
+/** Открыть/создать БД (синглтон). */
 export function openDb() {
     if (dbPromise) return dbPromise;
 
@@ -22,8 +20,11 @@ export function openDb() {
 
         request.onupgradeneeded = (event) => {
             const db = event.target.result;
-            if (!db.objectStoreNames.contains(STORE_NAME)) {
-                db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+            if (!db.objectStoreNames.contains(STORE_PENDING)) {
+                db.createObjectStore(STORE_PENDING, { keyPath: 'id' });
+            }
+            if (!db.objectStoreNames.contains(STORE_DRAFTS)) {
+                db.createObjectStore(STORE_DRAFTS, { keyPath: 'terminalId' });
             }
         };
 
@@ -34,11 +35,9 @@ export function openDb() {
     return dbPromise;
 }
 
-/**
- * Сохранить визит в очередь на отправку.
- * @param {Object} visitData - данные визита
- * @returns {Promise<void>}
- */
+// ==================== Pending Visits ====================
+
+/** Сохранить визит в очередь на отправку. */
 export async function savePendingVisit(visitData) {
     const db = await openDb();
     const record = {
@@ -53,7 +52,6 @@ export async function savePendingVisit(visitData) {
         latitude: visitData.latitude ?? null,
         longitude: visitData.longitude ?? null,
         ingredients: visitData.ingredients || [],
-        // Фото хранятся как Blob (File наследуется от Blob, IndexedDB сохраняет)
         photos: {
             inside: visitData.photos?.inside ?? null,
             outside: visitData.photos?.outside ?? null,
@@ -71,22 +69,19 @@ export async function savePendingVisit(visitData) {
     };
 
     return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, 'readwrite');
-        tx.objectStore(STORE_NAME).put(record);
+        const tx = db.transaction(STORE_PENDING, 'readwrite');
+        tx.objectStore(STORE_PENDING).put(record);
         tx.oncomplete = () => resolve();
         tx.onerror = () => reject(tx.error);
     });
 }
 
-/**
- * Получить все ожидающие визиты, отсортированные по createdAt ASC.
- * @returns {Promise<Array>}
- */
+/** Получить все ожидающие визиты, отсортированные по createdAt ASC. */
 export async function getPendingVisits() {
     const db = await openDb();
     return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, 'readonly');
-        const request = tx.objectStore(STORE_NAME).getAll();
+        const tx = db.transaction(STORE_PENDING, 'readonly');
+        const request = tx.objectStore(STORE_PENDING).getAll();
         request.onsuccess = () => {
             const visits = request.result || [];
             visits.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
@@ -96,39 +91,27 @@ export async function getPendingVisits() {
     });
 }
 
-/**
- * Количество ожидающих визитов.
- * @returns {Promise<number>}
- */
+/** Количество ожидающих визитов. */
 export async function getPendingCount() {
     const db = await openDb();
     return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, 'readonly');
-        const request = tx.objectStore(STORE_NAME).count();
+        const tx = db.transaction(STORE_PENDING, 'readonly');
+        const request = tx.objectStore(STORE_PENDING).count();
         request.onsuccess = () => resolve(request.result);
         request.onerror = () => reject(request.error);
     });
 }
 
-/**
- * Обновить статус синхронизации визита.
- * @param {string} id
- * @param {'pending'|'syncing'|'failed'} status
- * @param {string|null} error
- * @returns {Promise<void>}
- */
+/** Обновить статус синхронизации визита. */
 export async function updateSyncStatus(id, status, error = null) {
     const db = await openDb();
     return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, 'readwrite');
-        const store = tx.objectStore(STORE_NAME);
+        const tx = db.transaction(STORE_PENDING, 'readwrite');
+        const store = tx.objectStore(STORE_PENDING);
         const getReq = store.get(id);
         getReq.onsuccess = () => {
             const record = getReq.result;
-            if (!record) {
-                resolve();
-                return;
-            }
+            if (!record) { resolve(); return; }
             record.syncStatus = status;
             record.syncError = error;
             if (status === 'failed') {
@@ -141,17 +124,62 @@ export async function updateSyncStatus(id, status, error = null) {
     });
 }
 
-/**
- * Удалить визит после успешной синхронизации.
- * @param {string} id
- * @returns {Promise<void>}
- */
+/** Удалить визит после успешной синхронизации. */
 export async function deletePendingVisit(id) {
     const db = await openDb();
     return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, 'readwrite');
-        tx.objectStore(STORE_NAME).delete(id);
+        const tx = db.transaction(STORE_PENDING, 'readwrite');
+        tx.objectStore(STORE_PENDING).delete(id);
         tx.oncomplete = () => resolve();
         tx.onerror = () => reject(tx.error);
+    });
+}
+
+// ==================== Visit Drafts ====================
+
+/** Сохранить/обновить черновик обслуживания (ключ: terminalId). */
+export async function saveDraft(draft) {
+    const db = await openDb();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_DRAFTS, 'readwrite');
+        tx.objectStore(STORE_DRAFTS).put({
+            ...draft,
+            updatedAt: new Date().toISOString(),
+        });
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+    });
+}
+
+/** Получить черновик по terminalId. */
+export async function getDraft(terminalId) {
+    const db = await openDb();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_DRAFTS, 'readonly');
+        const request = tx.objectStore(STORE_DRAFTS).get(Number(terminalId));
+        request.onsuccess = () => resolve(request.result || null);
+        request.onerror = () => reject(request.error);
+    });
+}
+
+/** Удалить черновик (после успешного сохранения визита). */
+export async function deleteDraft(terminalId) {
+    const db = await openDb();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_DRAFTS, 'readwrite');
+        tx.objectStore(STORE_DRAFTS).delete(Number(terminalId));
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+    });
+}
+
+/** Получить все черновики (для отображения индикаторов на Home.vue). */
+export async function getAllDrafts() {
+    const db = await openDb();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_DRAFTS, 'readonly');
+        const request = tx.objectStore(STORE_DRAFTS).getAll();
+        request.onsuccess = () => resolve(request.result || []);
+        request.onerror = () => reject(request.error);
     });
 }

@@ -153,11 +153,14 @@
 
                     <!-- Кнопки действий -->
                     <div class="flex gap-2">
-                        <router-link :to="{ name: 'service', params: { id: terminal.id } }" class="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-blue-500 py-2.5 text-sm font-medium text-white active:bg-blue-600">
+                        <router-link :to="{ name: 'service', params: { id: terminal.id } }"
+                            class="flex-1 flex items-center justify-center gap-1.5 rounded-lg py-2.5 text-sm font-medium text-white active:opacity-80"
+                            :class="hasDraft(terminal.id) ? 'bg-orange-500' : 'bg-blue-500'"
+                        >
                             <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75a4.5 4.5 0 01-4.884 4.484c-1.076-.091-2.264.071-2.95.904l-7.152 8.684a2.548 2.548 0 11-3.586-3.586l8.684-7.152c.833-.686.995-1.874.904-2.95a4.5 4.5 0 016.336-4.486l-3.276 3.276a3.004 3.004 0 002.25 2.25l3.276-3.276c.256.565.398 1.192.398 1.852z" />
                             </svg>
-                            Обслужить
+                            {{ hasDraft(terminal.id) ? 'Продолжить' : 'Обслужить' }}
                         </router-link>
                         <router-link :to="{ name: 'history', params: { id: terminal.id } }" class="flex items-center justify-center gap-1.5 rounded-lg bg-gray-100 px-4 py-2.5 text-sm font-medium text-gray-700 active:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:active:bg-gray-700">
                             <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
@@ -195,10 +198,12 @@ import { useRouter } from 'vue-router';
 import apiClient from '@/api/client';
 import { useOfflineQueueStore } from '@/stores/offlineQueue';
 import { useTerminalsStore } from '@/stores/terminals';
+import { getAllDrafts } from '@/services/offlineDb';
 
 const router = useRouter();
 const offlineQueueStore = useOfflineQueueStore();
 const terminalsStore = useTerminalsStore();
+const draftTerminalIds = ref(new Set());
 
 const IRKUTSK_TZ = 'Asia/Irkutsk';
 const SETTINGS_KEY = 'terminals_home_settings';
@@ -410,8 +415,20 @@ function pluralize(n, one, few, many) {
     return many;
 }
 
+async function loadDrafts() {
+    try {
+        const drafts = await getAllDrafts();
+        draftTerminalIds.value = new Set(drafts.map(d => d.terminalId));
+    } catch {}
+}
+
+function hasDraft(terminalId) {
+    return draftTerminalIds.value.has(terminalId);
+}
+
 onMounted(() => {
     fetchTerminals();
+    loadDrafts();
     document.addEventListener('vendista:updated', fetchTerminals);
 });
 

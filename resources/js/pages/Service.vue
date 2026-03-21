@@ -425,11 +425,12 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue';
+import { ref, reactive, computed, watch, onMounted, onBeforeUnmount } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import apiClient from '@/api/client';
 import { useOfflineQueueStore } from '@/stores/offlineQueue';
 import { useTerminalsStore } from '@/stores/terminals';
+import { saveDraft, getDraft, deleteDraft } from '@/services/offlineDb';
 
 const router = useRouter();
 const route = useRoute();
@@ -934,6 +935,8 @@ async function saveVisit() {
             });
         }
 
+        // Успех — удалить черновик
+        await deleteDraft(Number(route.params.id));
         router.push('/');
     } catch (error) {
         // Сетевая ошибка (нет response) или браузер offline -- сохранить в очередь
@@ -948,6 +951,7 @@ async function saveVisit() {
             try {
                 const visitData = buildVisitData();
                 await offlineQueueStore.enqueue(visitData);
+                await deleteDraft(Number(route.params.id));
                 showToast('success', 'Нет интернета, но данные сохранены. Отправлю как появится интернет');
                 setTimeout(() => router.push('/'), 2000);
                 return;
@@ -978,11 +982,80 @@ function nextStep() {
 // Предупреждение при обновлении/закрытии страницы
 function onBeforeUnloadHandler(e) {
     e.preventDefault();
+    autoSaveDraft();
 }
+
+// Автосохранение черновика в IndexedDB (без фото — только текстовые данные)
+let draftTimer = null;
+function autoSaveDraft() {
+    const terminalId = Number(route.params.id);
+    if (!terminalId || isEditMode.value) return;
+
+    saveDraft({
+        terminalId,
+        terminalName: terminal.value?.comment || '',
+        currentStep: currentStep.value,
+        visitedAt: visitedAt.value,
+        waterMain: water.main,
+        waterSpare: water.spare,
+        comment: comment.value,
+        latitude: coords.value.latitude,
+        longitude: coords.value.longitude,
+        ingredients: ingredients.value.map(ing => ({
+            id: ing.id,
+            name: ing.name,
+            brought: ing.brought,
+            needed: ing.needed,
+        })),
+    }).catch(() => {});
+}
+
+function scheduleDraftSave() {
+    clearTimeout(draftTimer);
+    draftTimer = setTimeout(autoSaveDraft, 500);
+}
+
+// Восстановление черновика
+async function restoreDraft() {
+    const terminalId = Number(route.params.id);
+    const draft = await getDraft(terminalId).catch(() => null);
+    if (!draft) return false;
+
+    currentStep.value = draft.currentStep || 1;
+    visitedAt.value = draft.visitedAt || nowIrkutsk();
+    water.main = draft.waterMain ?? 0.5;
+    water.spare = draft.waterSpare ?? 0;
+    comment.value = draft.comment || '';
+    if (draft.latitude != null) coords.value.latitude = draft.latitude;
+    if (draft.longitude != null) coords.value.longitude = draft.longitude;
+
+    // Восстановить значения brought/needed для ингредиентов
+    if (draft.ingredients?.length && ingredients.value.length) {
+        for (const saved of draft.ingredients) {
+            const ing = ingredients.value.find(i => i.id === saved.id);
+            if (ing) {
+                ing.brought = saved.brought || 0;
+                ing.needed = saved.needed || 0;
+            }
+        }
+    }
+
+    return true;
+}
+
+// Наблюдение за изменениями формы для автосохранения
+watch(
+    [() => currentStep.value, () => visitedAt.value, () => water.main, () => water.spare,
+     () => comment.value, () => ingredients.value, () => coords.value],
+    scheduleDraftSave,
+    { deep: true },
+);
 
 // Освобождение Object URL при размонтировании
 onBeforeUnmount(() => {
     window.removeEventListener('beforeunload', onBeforeUnloadHandler);
+    clearTimeout(draftTimer);
+    autoSaveDraft();
     if (photoInsidePreview.value) URL.revokeObjectURL(photoInsidePreview.value);
     if (photoOutsidePreview.value) URL.revokeObjectURL(photoOutsidePreview.value);
     commentPhotoPreviews.value.forEach(url => URL.revokeObjectURL(url));
@@ -994,6 +1067,9 @@ onMounted(async () => {
     await fetchTerminal();
     if (route.query.edit === 'last') {
         await loadVisitForEdit();
+    } else {
+        // Восстановить черновик (если есть)
+        await restoreDraft();
     }
     requestGeolocation();
 });
