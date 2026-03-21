@@ -212,9 +212,10 @@
                             class="w-full resize-none rounded-xl border border-gray-200 bg-gray-50 p-3 pr-12 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-400 dark:border-gray-700 dark:bg-gray-800 dark:text-white dark:placeholder-gray-500 dark:focus:border-blue-500 dark:focus:bg-gray-800"
                         ></textarea>
                         <button
+                            v-if="speechSupported"
                             class="absolute right-3 bottom-3 flex h-10 w-10 items-center justify-center rounded-full bg-blue-500 text-white shadow-md active:bg-blue-600 transition-colors"
                             :class="{ 'animate-pulse bg-red-500 active:bg-red-600': isRecording }"
-                            @click="isRecording = !isRecording"
+                            @click="toggleSpeech"
                         >
                             <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
@@ -222,7 +223,7 @@
                         </button>
                     </div>
                     <p v-if="isRecording" class="mt-2 text-xs text-red-500 font-medium animate-pulse">Запись голоса...</p>
-                    <p v-else class="mt-2 text-xs text-gray-400 dark:text-gray-500">Нажмите на микрофон для голосового ввода</p>
+                    <p v-else-if="speechSupported" class="mt-2 text-xs text-gray-400 dark:text-gray-500">Нажмите на микрофон для голосового ввода</p>
                 </div>
 
                 <!-- Прикреплённые фото к комментарию -->
@@ -478,6 +479,49 @@ const ingredients = ref([]);
 
 const comment = ref('');
 const isRecording = ref(false);
+const speechSupported = typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
+let recognition = null;
+
+function toggleSpeech() {
+    if (isRecording.value) {
+        recognition?.stop();
+        return;
+    }
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    recognition = new SpeechRecognition();
+    recognition.lang = 'ru-RU';
+    recognition.continuous = true;
+    recognition.interimResults = false;
+
+    recognition.onresult = (event) => {
+        let text = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+            if (event.results[i].isFinal) {
+                text += event.results[i][0].transcript;
+            }
+        }
+        if (text) {
+            comment.value += (comment.value ? ' ' : '') + text.trim();
+        }
+    };
+
+    recognition.onend = () => {
+        isRecording.value = false;
+        recognition = null;
+    };
+
+    recognition.onerror = (event) => {
+        if (event.error !== 'aborted') {
+            showToast('error', 'Ошибка распознавания речи');
+        }
+        isRecording.value = false;
+        recognition = null;
+    };
+
+    recognition.start();
+    isRecording.value = true;
+}
 const showExitModal = ref(false);
 const neededDismissed = ref(false);
 const saving = ref(false);
