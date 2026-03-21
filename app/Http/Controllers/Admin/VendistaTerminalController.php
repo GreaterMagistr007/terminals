@@ -105,6 +105,17 @@ class VendistaTerminalController extends Controller
         ]);
         $terminal->loadMax('serviceVisits', 'visited_at');
 
+        // Подсчёт продаж с последнего визита
+        $lastVisitedAt = $terminal->service_visits_max_visited_at;
+        $query = VendistaTransaction::where('term_id', $terminal->vendista_id)
+            ->where('result', 1);
+
+        if ($lastVisitedAt) {
+            $query->where('time', '>', $lastVisitedAt);
+        }
+
+        $terminal->setAttribute('sales_since_last_visit', $query->count());
+
         return response()->json(['terminal' => $terminal]);
     }
 
