@@ -481,9 +481,18 @@ const comment = ref('');
 const isRecording = ref(false);
 const speechSupported = typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
 let recognition = null;
+let silenceTimer = null;
+
+function resetSilenceTimer() {
+    clearTimeout(silenceTimer);
+    silenceTimer = setTimeout(() => {
+        recognition?.stop();
+    }, 2500);
+}
 
 function toggleSpeech() {
     if (isRecording.value) {
+        clearTimeout(silenceTimer);
         recognition?.stop();
         return;
     }
@@ -492,35 +501,52 @@ function toggleSpeech() {
     recognition = new SpeechRecognition();
     recognition.lang = 'ru-RU';
     recognition.continuous = true;
-    recognition.interimResults = false;
+    recognition.interimResults = true;
+
+    let finalTranscript = '';
 
     recognition.onresult = (event) => {
-        let text = '';
+        let interim = '';
         for (let i = event.resultIndex; i < event.results.length; i++) {
+            const text = event.results[i][0].transcript;
             if (event.results[i].isFinal) {
-                text += event.results[i][0].transcript;
+                finalTranscript += text;
+                resetSilenceTimer();
+            } else {
+                interim += text;
+                resetSilenceTimer();
             }
         }
-        if (text) {
-            comment.value += (comment.value ? ' ' : '') + text.trim();
-        }
+        // Показываем финальный + промежуточный текст в реальном времени
+        const base = comment.value.slice(0, comment.value.length - (recognition._lastInterimLength || 0));
+        const addition = (finalTranscript + interim).trim();
+        recognition._lastInterimLength = addition.length > 0 ? (addition.length + (base ? 1 : 0)) : 0;
+        comment.value = addition ? (base ? base + ' ' + addition : addition) : base;
     };
 
     recognition.onend = () => {
+        clearTimeout(silenceTimer);
+        // Убираем промежуточный текст, оставляем только финальный
+        const base = comment.value.slice(0, comment.value.length - (recognition._lastInterimLength || 0));
+        const addition = finalTranscript.trim();
+        comment.value = addition ? (base ? base + ' ' + addition : addition) : base;
         isRecording.value = false;
         recognition = null;
     };
 
     recognition.onerror = (event) => {
-        if (event.error !== 'aborted') {
+        clearTimeout(silenceTimer);
+        if (event.error !== 'aborted' && event.error !== 'no-speech') {
             showToast('error', 'Ошибка распознавания речи');
         }
         isRecording.value = false;
         recognition = null;
     };
 
+    recognition._lastInterimLength = 0;
     recognition.start();
     isRecording.value = true;
+    resetSilenceTimer();
 }
 const showExitModal = ref(false);
 const neededDismissed = ref(false);
