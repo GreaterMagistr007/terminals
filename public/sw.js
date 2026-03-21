@@ -1,15 +1,32 @@
-const CACHE_NAME = 'terminals-v1';
+const CACHE_NAME = 'terminals-v2';
 const API_CACHE_NAME = 'terminals-api-v1';
-const STATIC_ASSETS = [
-    '/',
-    '/manifest.json',
-];
 
-// Установка: кешируем базовые ресурсы
+// Прекеширование: загрузить HTML-оболочку и все её ассеты
+async function precacheAppShell() {
+    const cache = await caches.open(CACHE_NAME);
+
+    // Загрузить HTML-оболочку
+    const response = await fetch('/');
+    await cache.put('/', response.clone());
+
+    // Извлечь URL ассетов из HTML
+    const html = await response.text();
+    const urls = [];
+    const regex = /(?:src|href)="(\/build\/assets\/[^"]+)"/g;
+    let match;
+    while ((match = regex.exec(html)) !== null) {
+        urls.push(match[1]);
+    }
+
+    // Также закешировать manifest и иконки
+    urls.push('/manifest.json', '/favicon.ico');
+
+    await Promise.all(urls.map((url) => cache.add(url).catch(() => {})));
+}
+
+// Установка: прекеширование app shell с ассетами
 self.addEventListener('install', (event) => {
-    event.waitUntil(
-        caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS))
-    );
+    event.waitUntil(precacheAppShell());
     self.skipWaiting();
 });
 
@@ -26,6 +43,23 @@ self.addEventListener('activate', (event) => {
         )
     );
     self.clients.claim();
+});
+
+// Обновление кеша ассетов по запросу из приложения (fallback)
+self.addEventListener('message', (event) => {
+    if (event.data?.type === 'CACHE_ASSETS' && Array.isArray(event.data.urls)) {
+        event.waitUntil(
+            caches.open(CACHE_NAME).then((cache) =>
+                Promise.all(
+                    event.data.urls.map((url) =>
+                        cache.match(url).then((cached) => {
+                            if (!cached) return cache.add(url).catch(() => {});
+                        })
+                    )
+                )
+            )
+        );
+    }
 });
 
 // Стратегии кеширования по типу запроса
@@ -60,7 +94,6 @@ self.addEventListener('fetch', (event) => {
         event.respondWith(
             fetch(request)
                 .then((response) => {
-                    // Кешируем успешные ответы
                     if (response.ok) {
                         const clone = response.clone();
                         caches.open(API_CACHE_NAME).then((cache) => cache.put(request, clone));
@@ -68,7 +101,6 @@ self.addEventListener('fetch', (event) => {
                     return response;
                 })
                 .catch(() =>
-                    // При ошибке сети -- возвращаем из кеша или 503
                     caches.match(request).then((cached) => {
                         if (cached) return cached;
                         return new Response(
@@ -84,13 +116,13 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // Навигация (HTML): Network First, fallback на кеш
+    // Навигация (HTML): Network First, fallback на кешированную SPA-оболочку
     if (request.mode === 'navigate') {
         event.respondWith(
             fetch(request)
                 .then((response) => {
                     const clone = response.clone();
-                    caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+                    caches.open(CACHE_NAME).then((cache) => cache.put('/', clone));
                     return response;
                 })
                 .catch(() => caches.match('/'))
