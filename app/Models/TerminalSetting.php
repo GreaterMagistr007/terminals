@@ -12,6 +12,7 @@ class TerminalSetting extends Model
 
     protected $fillable = [
         'vendista_terminal_id',
+        'short_name',
         'hidden',
         'uses_water',
         'address',

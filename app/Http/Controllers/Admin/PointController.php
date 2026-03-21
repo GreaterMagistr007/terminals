@@ -32,6 +32,7 @@ class PointController extends Controller
     public function update(Request $request, VendistaTerminal $terminal): JsonResponse
     {
         $validated = $request->validate([
+            'short_name' => ['nullable', 'string', 'max:100'],
             'hidden' => ['required', 'boolean'],
             'uses_water' => ['required', 'boolean'],
             'address' => ['nullable', 'string', 'max:500'],

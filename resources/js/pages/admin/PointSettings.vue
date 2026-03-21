@@ -22,6 +22,21 @@
 
         <!-- Настройки -->
         <div v-else-if="terminal" class="mx-auto max-w-2xl space-y-4 p-4">
+            <!-- Краткое название -->
+            <div class="rounded-lg bg-white p-4 shadow dark:bg-gray-800">
+                <p class="font-medium text-gray-900 dark:text-white">Краткое название</p>
+                <p class="mt-0.5 text-sm text-gray-500 dark:text-gray-400">Отображается на главной и в продажах вместо полного</p>
+                <input
+                    v-model="settings.short_name"
+                    @blur="saveSettings"
+                    @keydown.enter="$event.target.blur()"
+                    type="text"
+                    maxlength="100"
+                    :placeholder="terminal?.comment || 'Краткое название'"
+                    class="mt-3 block w-full rounded border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                />
+            </div>
+
             <!-- Переключатель: скрыть из списка -->
             <div class="flex items-center justify-between rounded-lg bg-white p-4 shadow dark:bg-gray-800">
                 <div>
@@ -327,6 +342,7 @@ const availableIngredients = computed(() => {
 
 // Настройки точки (локальное состояние)
 const settings = ref({
+    short_name: null,
     hidden: false,
     uses_water: true,
     address: null,
@@ -369,6 +385,7 @@ async function fetchTerminal() {
 
         if (data.terminal.settings) {
             settings.value = {
+                short_name: data.terminal.settings.short_name,
                 hidden: data.terminal.settings.hidden,
                 uses_water: data.terminal.settings.uses_water,
                 address: data.terminal.settings.address,
@@ -517,6 +534,7 @@ async function saveSettings() {
 
     try {
         const { data } = await apiClient.put(`/admin/points/${terminalId}`, {
+            short_name: settings.value.short_name || null,
             hidden: settings.value.hidden,
             uses_water: settings.value.uses_water,
             address: settings.value.address,
@@ -529,6 +547,7 @@ async function saveSettings() {
 
         if (data.terminal.settings) {
             settings.value = {
+                short_name: data.terminal.settings.short_name,
                 hidden: data.terminal.settings.hidden,
                 uses_water: data.terminal.settings.uses_water,
                 address: data.terminal.settings.address,

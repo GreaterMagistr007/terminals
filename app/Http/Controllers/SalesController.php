@@ -37,15 +37,23 @@ class SalesController extends Controller
             ->orderByDesc('total_sum')
             ->get();
 
-        // Загрузка названий терминалов
-        $terminalNames = VendistaTerminal::pluck('comment', 'vendista_id');
+        // Загрузка терминалов с настройками для краткого названия
+        $terminals = VendistaTerminal::with('settings')->get()
+            ->keyBy('vendista_id');
 
-        $sales = $salesData->map(fn($row) => [
-            'term_id' => $row->term_id,
-            'terminal_name' => $terminalNames->get($row->term_id) ?? "Терминал #{$row->term_id}",
-            'total_sum' => (int) $row->total_sum,
-            'total_count' => (int) $row->total_count,
-        ])->values();
+        $sales = $salesData->map(function ($row) use ($terminals) {
+            $terminal = $terminals->get($row->term_id);
+            $name = $terminal?->settings?->short_name
+                ?? $terminal?->comment
+                ?? "Терминал #{$row->term_id}";
+
+            return [
+                'term_id' => $row->term_id,
+                'terminal_name' => $name,
+                'total_sum' => (int) $row->total_sum,
+                'total_count' => (int) $row->total_count,
+            ];
+        })->values();
 
         // Итого по всем точкам
         $totals = [

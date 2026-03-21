@@ -79,7 +79,7 @@
                 >
                     <div class="h-10 w-1 shrink-0 rounded-full" :class="statusBarClass(terminal)"></div>
                     <div class="flex-1 min-w-0">
-                        <p class="font-medium text-gray-900 truncate dark:text-white">{{ terminal.comment || 'Без описания' }}</p>
+                        <p class="font-medium text-gray-900 truncate dark:text-white">{{ terminal.settings?.short_name || terminal.comment || 'Без описания' }}</p>
                         <p class="text-xs text-gray-400 dark:text-gray-500">продаж с последнего обслуживания: {{ terminal.sales_since_last_visit ?? 0 }}</p>
                     </div>
                     <div class="shrink-0 flex items-center gap-2">
