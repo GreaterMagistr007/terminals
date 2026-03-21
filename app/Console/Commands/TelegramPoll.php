@@ -19,7 +19,7 @@ class TelegramPoll extends Command
     {
         $this->info('Telegram bot polling запущен. Ctrl+C для остановки.');
 
-        if (extension_loaded('pcntl')) {
+        if (function_exists('pcntl')) {
             pcntl_signal(SIGTERM, fn () => $this->shouldStop = true);
             pcntl_signal(SIGINT, fn () => $this->shouldStop = true);
         }
@@ -27,7 +27,7 @@ class TelegramPoll extends Command
         $offset = 0;
 
         while (!$this->shouldStop) {
-            if (extension_loaded('pcntl')) {
+            if (function_exists('pcntl')) {
                 pcntl_signal_dispatch();
             }
 
@@ -64,13 +64,41 @@ class TelegramPoll extends Command
             return;
         }
 
-        // Обработка /start — обычная авторизация
-        if ($text === '/start' || $text === '/login') {
-            $this->handleLogin($telegramId, $chatId, "{$firstName} {$lastName}", $telegramService);
+        // Обработка /start auth_{token} — авторизация по коду
+        if (str_starts_with($text, '/start auth_')) {
+            $sessionToken = substr($text, strlen('/start auth_'));
+            $username = $message['from']['username'] ?? '';
+            $this->handleAuthRequest($sessionToken, $telegramId, $username, $chatId, $telegramService, $authService);
             return;
         }
 
-        $telegramService->sendMessage($chatId, 'Используйте /start для авторизации в приложении.');
+        // Обработка /start — подсказка
+        if ($text === '/start' || $text === '/login') {
+            $telegramService->sendMessage($chatId, 'Для входа используйте страницу авторизации приложения.');
+            return;
+        }
+
+        $telegramService->sendMessage($chatId, 'Для входа используйте страницу авторизации приложения.');
+    }
+
+    /** Обработка /start auth_{token} — генерация кода и отправка админу */
+    private function handleAuthRequest(
+        string $sessionToken,
+        string $telegramId,
+        string $username,
+        string $chatId,
+        TelegramService $telegramService,
+        AuthService $authService,
+    ): void {
+        $error = $authService->handleLoginFromBot($sessionToken, $telegramId, $username, $telegramService);
+
+        if ($error !== null) {
+            $telegramService->sendMessage($chatId, $error);
+            return;
+        }
+
+        $telegramService->sendMessage($chatId, 'Код отправлен администратору. Введите его на странице входа.');
+        $this->info("Login code sent to admin for telegram: {$telegramId}");
     }
 
     /** Обработка обычного /start — генерация одноразовой ссылки */

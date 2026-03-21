@@ -98,6 +98,86 @@ class AuthService
         });
     }
 
+    /** Создание сессии логина (для ссылки на бота) */
+    public function createLoginSession(): AuthToken
+    {
+        return AuthToken::generateLoginSession();
+    }
+
+    /**
+     * Обработка запроса авторизации из бота.
+     * Проверяет сессию, находит пользователя, генерирует код, отправляет админу.
+     * Возвращает текст ошибки или null при успехе.
+     */
+    public function handleLoginFromBot(
+        string $sessionToken,
+        string $telegramId,
+        string $telegramUsername,
+        TelegramService $telegramService,
+    ): ?string {
+        $session = AuthToken::where('token', $sessionToken)
+            ->where('type', AuthToken::TYPE_LOGIN_SESSION)
+            ->first();
+
+        if ($session === null || !$session->isValid()) {
+            return 'Ссылка недействительна или истекла. Запросите новую на странице входа.';
+        }
+
+        $user = User::where('telegram_id', $telegramId)->first();
+
+        if ($user === null) {
+            return 'Вы не зарегистрированы в системе. Обратитесь к администратору.';
+        }
+
+        if (!$user->is_active) {
+            return 'Ваш аккаунт деактивирован. Обратитесь к администратору.';
+        }
+
+        $session->markAsUsed();
+
+        $code = AuthToken::generateLoginCode($user->id);
+
+        $adminTelegramId = config('services.telegram.admin_telegram_id');
+        $displayName = $telegramUsername ? "@{$telegramUsername}" : $user->name;
+
+        $telegramService->sendMessage(
+            $adminTelegramId,
+            "Запрос входа: <b>{$displayName}</b>\nКод: <code>{$code->token}</code>",
+        );
+
+        return null;
+    }
+
+    /**
+     * Авторизация по коду.
+     * Находит код, авторизует пользователя.
+     */
+    public function loginViaCode(string $code): ?User
+    {
+        return DB::transaction(function () use ($code): ?User {
+            $authToken = AuthToken::where('token', $code)
+                ->where('type', AuthToken::TYPE_LOGIN_CODE)
+                ->lockForUpdate()
+                ->first();
+
+            if ($authToken === null || !$authToken->isValid()) {
+                return null;
+            }
+
+            $authToken->markAsUsed();
+
+            $user = $authToken->user;
+
+            if ($user === null || !$user->is_active) {
+                return $user;
+            }
+
+            $this->authenticate($user);
+
+            return $user;
+        });
+    }
+
     /** Создание инвайт-токена для пользователя (вызывается админом) */
     public function createInvite(User $user): AuthToken
     {

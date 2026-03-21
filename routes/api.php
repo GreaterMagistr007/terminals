@@ -9,6 +9,7 @@ use App\Http\Controllers\Admin\VendistaTerminalController;
 use App\Http\Controllers\Admin\VendistaTransactionController;
 use App\Http\Controllers\Admin\WarehouseController;
 use App\Http\Controllers\Auth\AuthController;
+use App\Http\Controllers\Auth\LoginCodeController;
 use App\Http\Controllers\Auth\TelegramBotCallbackController;
 use App\Http\Controllers\Auth\TelegramWidgetController;
 use App\Http\Controllers\SalesController;
@@ -26,6 +27,8 @@ Route::get('/health', function () {
 Route::prefix('auth')->middleware('throttle:10,1')->group(function () {
     Route::post('/telegram-widget', [TelegramWidgetController::class, 'callback']);
     Route::post('/telegram-bot/{token}', [TelegramBotCallbackController::class, 'callback']);
+    Route::post('/login-session', [LoginCodeController::class, 'createSession']);
+    Route::post('/verify-code', [LoginCodeController::class, 'verifyCode']);
 });
 
 // Защищённые маршруты (авторизованный + активный пользователь)
