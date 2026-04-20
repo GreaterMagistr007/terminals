@@ -40,6 +40,9 @@ return [
         'bot_username' => env('TELEGRAM_BOT_USERNAME'),
         'admin_telegram_id' => env('ADMIN_TELEGRAM_ID'),
         'group_chat_id' => env('TELEGRAM_GROUP_CHAT_ID'),
+        // SOCKS5-прокси для обхода блокировки api.telegram.org в регионах РФ.
+        // Формат: socks5h://host:port (например, socks5h://127.0.0.1:1080).
+        'proxy' => env('TELEGRAM_PROXY'),
     ],
 
     'vendista' => [

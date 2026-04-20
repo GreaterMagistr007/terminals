@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -12,11 +13,28 @@ class TelegramService
 
     private string $botToken;
     private string $apiBaseUrl;
+    private ?string $proxy;
 
     public function __construct()
     {
         $this->botToken = config('services.telegram.bot_token');
         $this->apiBaseUrl = 'https://api.telegram.org/bot' . $this->botToken;
+        $this->proxy = config('services.telegram.proxy') ?: null;
+    }
+
+    /**
+     * HTTP-клиент для вызовов Telegram Bot API.
+     * Если задан TELEGRAM_PROXY — трафик идёт через SOCKS5 (обход блокировки в РФ).
+     */
+    private function http(): PendingRequest
+    {
+        $client = Http::asJson();
+
+        if ($this->proxy !== null) {
+            $client = $client->withOptions(['proxy' => $this->proxy]);
+        }
+
+        return $client;
     }
 
     /**
@@ -63,7 +81,7 @@ class TelegramService
             $payload['reply_markup'] = json_encode($replyMarkup);
         }
 
-        $response = Http::post("{$this->apiBaseUrl}/sendMessage", $payload);
+        $response = $this->http()->post("{$this->apiBaseUrl}/sendMessage", $payload);
 
         if (!$response->successful()) {
             Log::error('Telegram sendMessage failed', [
@@ -93,7 +111,7 @@ class TelegramService
             $payload['parse_mode'] = $parseMode;
         }
 
-        $response = Http::post("{$this->apiBaseUrl}/sendPhoto", $payload);
+        $response = $this->http()->post("{$this->apiBaseUrl}/sendPhoto", $payload);
 
         if (!$response->successful()) {
             Log::error('Telegram sendPhoto failed', [
@@ -115,7 +133,7 @@ class TelegramService
      */
     public function sendMediaGroup(string $chatId, array $media): bool
     {
-        $response = Http::post("{$this->apiBaseUrl}/sendMediaGroup", [
+        $response = $this->http()->post("{$this->apiBaseUrl}/sendMediaGroup", [
             'chat_id' => $chatId,
             'media' => json_encode($media),
         ]);
@@ -135,7 +153,7 @@ class TelegramService
     /** Получение обновлений через long-polling */
     public function getUpdates(int $offset = 0, int $timeout = 30): array
     {
-        $response = Http::timeout($timeout + 5)->post("{$this->apiBaseUrl}/getUpdates", [
+        $response = $this->http()->timeout($timeout + 5)->post("{$this->apiBaseUrl}/getUpdates", [
             'offset' => $offset,
             'timeout' => $timeout,
             'allowed_updates' => ['message'],
