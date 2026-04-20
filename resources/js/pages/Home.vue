@@ -256,14 +256,25 @@ const WATER_PER_CUP_ML = 340;  // расход воды на стакан, мл
 
 /**
  * Расчёт оставшейся воды с учётом продаж.
- * Когда основная бутыль заканчивается, расход переходит на запасную.
+ * - Без разветвителя: расход идёт из основной, при опустошении — из запасной.
+ * - С разветвителем (settings.water_split): обе бутылки расходуются параллельно
+ *   по WATER_PER_CUP_ML/2 за продажу, не «перетекая» одна в другую.
  */
 function estimatedWater(terminal) {
     if (!terminal.latest_visit) return { main: 0, spare: 0 };
     const mainMl = (terminal.latest_visit.water_main ?? 0) * BOTTLE_VOLUME_ML;
     const spareMl = (terminal.latest_visit.water_spare ?? 0) * BOTTLE_VOLUME_ML;
-    const usedMl = (terminal.sales_since_last_visit ?? 0) * WATER_PER_CUP_ML;
+    const sales = terminal.sales_since_last_visit ?? 0;
 
+    if (terminal.settings?.water_split) {
+        const perBottleMl = sales * (WATER_PER_CUP_ML / 2);
+        return {
+            main: Math.min(1, Math.max(0, mainMl - perBottleMl) / BOTTLE_VOLUME_ML),
+            spare: Math.min(1, Math.max(0, spareMl - perBottleMl) / BOTTLE_VOLUME_ML),
+        };
+    }
+
+    const usedMl = sales * WATER_PER_CUP_ML;
     let remainingMain = mainMl - usedMl;
     let remainingSpare = spareMl;
 

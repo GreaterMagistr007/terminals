@@ -79,6 +79,27 @@
                 </button>
             </div>
 
+            <!-- Переключатель: разветвитель воды (обе бутылки параллельно) -->
+            <div v-if="settings.uses_water" class="flex items-center justify-between rounded-lg bg-white p-4 shadow dark:bg-gray-800">
+                <div>
+                    <p class="font-medium text-gray-900 dark:text-white">Разветвитель воды</p>
+                    <p class="mt-0.5 text-sm text-gray-500 dark:text-gray-400">Потребление одновременно из обеих бутылок (по 1/2 на стакан)</p>
+                </div>
+                <button
+                    @click="toggleWaterSplit"
+                    :disabled="saving"
+                    class="relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200 focus:outline-none"
+                    :class="settings.water_split ? 'bg-blue-500' : 'bg-gray-300 dark:bg-gray-600'"
+                    role="switch"
+                    :aria-checked="settings.water_split"
+                >
+                    <span
+                        class="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform duration-200"
+                        :class="settings.water_split ? 'translate-x-5' : 'translate-x-0'"
+                    ></span>
+                </button>
+            </div>
+
             <!-- Блок: местоположение -->
             <button
                 @click="openMap"
@@ -345,6 +366,7 @@ const settings = ref({
     short_name: null,
     hidden: false,
     uses_water: true,
+    water_split: false,
     address: null,
     latitude: null,
     longitude: null,
@@ -388,6 +410,7 @@ async function fetchTerminal() {
                 short_name: data.terminal.settings.short_name,
                 hidden: data.terminal.settings.hidden,
                 uses_water: data.terminal.settings.uses_water,
+                water_split: data.terminal.settings.water_split ?? false,
                 address: data.terminal.settings.address,
                 latitude: data.terminal.settings.latitude,
                 longitude: data.terminal.settings.longitude,
@@ -537,6 +560,7 @@ async function saveSettings() {
             short_name: settings.value.short_name || null,
             hidden: settings.value.hidden,
             uses_water: settings.value.uses_water,
+            water_split: settings.value.water_split,
             address: settings.value.address,
             latitude: settings.value.latitude,
             longitude: settings.value.longitude,
@@ -550,6 +574,7 @@ async function saveSettings() {
                 short_name: data.terminal.settings.short_name,
                 hidden: data.terminal.settings.hidden,
                 uses_water: data.terminal.settings.uses_water,
+                water_split: data.terminal.settings.water_split ?? false,
                 address: data.terminal.settings.address,
                 latitude: data.terminal.settings.latitude,
                 longitude: data.terminal.settings.longitude,
@@ -572,6 +597,16 @@ function toggleHidden() {
 /** Переключатель «Использует воду» */
 function toggleUsesWater() {
     settings.value.uses_water = !settings.value.uses_water;
+    // При выключении учёта воды автоматически снимаем разветвитель
+    if (!settings.value.uses_water) {
+        settings.value.water_split = false;
+    }
+    saveSettings();
+}
+
+/** Переключатель «Разветвитель воды» */
+function toggleWaterSplit() {
+    settings.value.water_split = !settings.value.water_split;
     saveSettings();
 }
 

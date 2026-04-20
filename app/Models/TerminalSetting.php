@@ -15,6 +15,7 @@ class TerminalSetting extends Model
         'short_name',
         'hidden',
         'uses_water',
+        'water_split',
         'address',
         'latitude',
         'longitude',
@@ -26,6 +27,7 @@ class TerminalSetting extends Model
         return [
             'hidden' => 'boolean',
             'uses_water' => 'boolean',
+            'water_split' => 'boolean',
             'latitude' => 'decimal:7',
             'longitude' => 'decimal:7',
         ];

@@ -655,14 +655,25 @@ async function fetchTerminal() {
     if (lv) {
         const mainMl = (lv.water_main ?? 0) * BOTTLE_VOLUME_ML;
         const spareMl = (lv.water_spare ?? 0) * BOTTLE_VOLUME_ML;
-        const usedMl = (terminalData.sales_since_last_visit ?? 0) * WATER_PER_CUP_ML;
+        const sales = terminalData.sales_since_last_visit ?? 0;
 
-        let remainingMain = mainMl - usedMl;
-        let remainingSpare = spareMl;
+        let remainingMain;
+        let remainingSpare;
 
-        if (remainingMain < 0) {
-            remainingSpare = Math.max(0, spareMl + remainingMain);
-            remainingMain = 0;
+        if (terminalData.settings?.water_split) {
+            // Разветвитель: обе бутылки расходуются параллельно, по половине на продажу.
+            const perBottleMl = sales * (WATER_PER_CUP_ML / 2);
+            remainingMain = Math.max(0, mainMl - perBottleMl);
+            remainingSpare = Math.max(0, spareMl - perBottleMl);
+        } else {
+            // Без разветвителя: сначала тратится основная, потом запасная.
+            const usedMl = sales * WATER_PER_CUP_ML;
+            remainingMain = mainMl - usedMl;
+            remainingSpare = spareMl;
+            if (remainingMain < 0) {
+                remainingSpare = Math.max(0, spareMl + remainingMain);
+                remainingMain = 0;
+            }
         }
 
         water.main = Math.round(Math.min(1, Math.max(0, remainingMain / BOTTLE_VOLUME_ML)) * 10) / 10;

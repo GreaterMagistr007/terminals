@@ -35,6 +35,7 @@ class PointController extends Controller
             'short_name' => ['nullable', 'string', 'max:100'],
             'hidden' => ['required', 'boolean'],
             'uses_water' => ['required', 'boolean'],
+            'water_split' => ['required', 'boolean'],
             'address' => ['nullable', 'string', 'max:500'],
             'latitude' => ['nullable', 'numeric', 'between:-90,90'],
             'longitude' => ['nullable', 'numeric', 'between:-180,180'],

@@ -74,7 +74,15 @@ class WaterCheck extends Command
         return self::SUCCESS;
     }
 
-    /** Расчёт уровня воды в основной бутылке (0..1) */
+    /**
+     * Расчёт критического уровня воды (0..1) для проверки порога уведомления.
+     *
+     * - Без разветвителя: расход идёт из основной, при её опустошении — из запасной;
+     *   возвращаем уровень основной (когда она кончится — уже критично).
+     * - С разветвителем (water_split): обе бутылки расходуются одновременно по
+     *   WATER_PER_CUP_ML/2; возвращаем минимум из двух остатков, т.к. опустошение
+     *   любой из бутылок ломает подачу воды через разветвитель.
+     */
     private function calculateWaterMain(VendistaTerminal $terminal): float
     {
         $latestVisit = $terminal->latestVisit;
@@ -95,15 +103,19 @@ class WaterCheck extends Command
         }
 
         $salesCount = $query->count();
-        $usedMl = $salesCount * self::WATER_PER_CUP_ML;
+        $isSplit = (bool) ($terminal->settings?->water_split ?? false);
 
-        $remainingMain = $mainMl - $usedMl;
-
-        // Если основная закончилась — расход переходит на запасную
-        if ($remainingMain < 0) {
-            $remainingMain = 0;
+        if ($isSplit) {
+            $perBottleMl = $salesCount * (self::WATER_PER_CUP_ML / 2);
+            $remMain = max(0, $mainMl - $perBottleMl);
+            $remSpare = max(0, $spareMl - $perBottleMl);
+            $critical = min($remMain, $remSpare);
+            return round(min(1, $critical / self::BOTTLE_VOLUME_ML), 1);
         }
 
-        return round(min(1, max(0, $remainingMain / self::BOTTLE_VOLUME_ML)), 1);
+        $usedMl = $salesCount * self::WATER_PER_CUP_ML;
+        $remainingMain = max(0, $mainMl - $usedMl);
+
+        return round(min(1, $remainingMain / self::BOTTLE_VOLUME_ML), 1);
     }
 }
