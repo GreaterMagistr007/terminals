@@ -27,3 +27,4 @@ composer test     # запуск тестов
 - **[docs/ROADMAP.md](./docs/ROADMAP.md)** — план реализации по этапам, текущий статус
 - **[docs/VENDISTA_API.md](./docs/VENDISTA_API.md)** — конспект Vendista API (244 эндпоинта)
 - **[docs/TELEMETRON_REFERENCE.md](./docs/TELEMETRON_REFERENCE.md)** — справочник функционала Telemetron (референс)
+- **[docs/TELEGRAM_PROXY.md](./docs/TELEGRAM_PROXY.md)** — SOCKS5-прокси для Telegram Bot API (сервер в РФ)

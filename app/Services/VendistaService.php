@@ -289,7 +289,10 @@ class VendistaService
                 'serial_number' => $remote['serial_number'] ?? null,
                 'latitude' => $remote['latitude'] ?? null,
                 'longitude' => $remote['longitude'] ?? null,
-                'last_online_at' => $remote['last_online_time'] ?? null,
+                // last_online_time приходит в Europe/Moscow без TZ — переводим в UTC
+                'last_online_at' => isset($remote['last_online_time'])
+                    ? Carbon::parse($remote['last_online_time'], 'Europe/Moscow')->utc()
+                    : null,
                 'state' => $remote['state'] ?? 0,
             ];
 
@@ -303,9 +306,9 @@ class VendistaService
                 $changed = false;
                 foreach ($attributes as $key => $value) {
                     if ($key === 'last_online_at') {
-                        $localValue = $local->last_online_at?->toIso8601String();
-                        $remoteValue = $value;
-                        if ($localValue !== $remoteValue) {
+                        $localTs = $local->last_online_at?->getTimestamp();
+                        $remoteTs = $value?->getTimestamp();
+                        if ($localTs !== $remoteTs) {
                             $changed = true;
                             break;
                         }
@@ -425,8 +428,9 @@ class VendistaService
             while ($chunkStart->lt($end)) {
                 $chunkEnd = $chunkStart->copy()->addMonth()->min($end);
 
-                $chunkFromStr = $chunkStart->format('Y-m-d\TH:i:s');
-                $chunkToStr = $chunkEnd->format('Y-m-d\TH:i:s');
+                // Vendista API принимает время в Europe/Moscow без TZ
+                $chunkFromStr = $chunkStart->copy()->timezone('Europe/Moscow')->format('Y-m-d\TH:i:s');
+                $chunkToStr = $chunkEnd->copy()->timezone('Europe/Moscow')->format('Y-m-d\TH:i:s');
 
                 $remoteTransactions = $this->fetchAllTransactions($chunkFromStr, $chunkToStr);
 
@@ -481,13 +485,13 @@ class VendistaService
             'trans_id' => $item['id'],
             'term_id' => $item['term_id'],
             'sum' => $item['sum'] ?? 0,
-            'time' => Carbon::parse($item['time']),
+            'time' => Carbon::parse($item['time'], 'Europe/Moscow')->utc(),
             'result' => $item['result'] ?? 0,
             'status' => $item['status'] ?? 0,
             'response_code' => $item['response_code'] ?? 0,
             'card_number' => $item['card_number'] ?? null,
             'reverse_id' => $item['reverse_id'] ?? 0,
-            'reverse_time' => isset($item['reverse_time']) ? Carbon::parse($item['reverse_time']) : null,
+            'reverse_time' => isset($item['reverse_time']) ? Carbon::parse($item['reverse_time'], 'Europe/Moscow')->utc() : null,
         ], $remoteTransactions);
 
         // SQLite: лимит 999 bind variables, 12 полей → max ~83 строки на чанк
@@ -528,7 +532,8 @@ class VendistaService
                 $dateFrom = now()->subDays(self::DEFAULT_TRANSACTIONS_DAYS)->startOfDay();
             }
 
-            $dateFromStr = $dateFrom->format('Y-m-d\TH:i:s');
+            // Vendista API принимает время в Europe/Moscow без TZ
+            $dateFromStr = $dateFrom->copy()->timezone('Europe/Moscow')->format('Y-m-d\TH:i:s');
 
             // Запрос к API без DateTo — получаем всё доступное
             $remoteTransactions = $this->fetchAllTransactions($dateFromStr);
@@ -610,13 +615,13 @@ class VendistaService
             'trans_id' => $item['id'],
             'term_id' => $item['term_id'],
             'sum' => $item['sum'] ?? 0,
-            'time' => Carbon::parse($item['time'])->format('Y-m-d H:i:s'),
+            'time' => Carbon::parse($item['time'], 'Europe/Moscow')->utc()->format('Y-m-d H:i:s'),
             'result' => $item['result'] ?? 0,
             'status' => $item['status'] ?? 0,
             'response_code' => $item['response_code'] ?? 0,
             'card_number' => $item['card_number'] ?? null,
             'reverse_id' => $item['reverse_id'] ?? 0,
-            'reverse_time' => isset($item['reverse_time']) ? Carbon::parse($item['reverse_time'])->format('Y-m-d H:i:s') : null,
+            'reverse_time' => isset($item['reverse_time']) ? Carbon::parse($item['reverse_time'], 'Europe/Moscow')->utc()->format('Y-m-d H:i:s') : null,
         ];
     }
 
