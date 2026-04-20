@@ -3,8 +3,8 @@
     "private": true,
     "type": "module",
     "scripts": {
-        "build": "vite build",
-        "dev": "vite"
+        "build": "vite build && node scripts/stamp-sw.cjs",
+        "dev": "node scripts/stamp-sw.cjs && vite"
     },
     "dependencies": {
         "axios": "^1.11.0",

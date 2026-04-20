@@ -1,5 +1,10 @@
-const CACHE_NAME = 'terminals-v3';
-const API_CACHE_NAME = 'terminals-api-v1';
+// Шаблон Service Worker'а. Скрипт scripts/stamp-sw.cjs подставляет реальный
+// BUILD_ID при сборке и копирует результат в public/sw.js. Благодаря этому
+// байты /sw.js меняются при каждой сборке, и браузер переустанавливает SW
+// (иначе старые клиенты продолжают получать устаревшие ассеты из кеша).
+const BUILD_ID = '__BUILD_ID__';
+const CACHE_NAME = 'terminals-' + BUILD_ID;
+const API_CACHE_NAME = 'terminals-api-' + BUILD_ID;
 
 /**
  * Прекеширование: HTML-оболочка + все Vite-ассеты из манифеста.
@@ -41,7 +46,7 @@ self.addEventListener('install', (event) => {
     self.skipWaiting();
 });
 
-// Активация: удаляем старые кеши
+// Активация: удаляем все кеши с чужими BUILD_ID (старые сборки)
 self.addEventListener('activate', (event) => {
     const validCaches = [CACHE_NAME, API_CACHE_NAME];
     event.waitUntil(
@@ -116,7 +121,24 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // Vite build assets: Cache First
+    // Vite-манифест: Network First. Cache First здесь запирал старый манифест,
+    // который ссылался на уже удалённые хэши — клиент видел «перемешанную» версию.
+    if (url.pathname === '/build/manifest.json' || url.pathname === '/build/.vite/manifest.json') {
+        event.respondWith(
+            fetch(request)
+                .then((response) => {
+                    if (response.ok) {
+                        const clone = response.clone();
+                        caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+                    }
+                    return response;
+                })
+                .catch(() => caches.match(request))
+        );
+        return;
+    }
+
+    // Vite build assets: Cache First (имена хэшированные — cache busting встроен)
     if (url.pathname.startsWith('/build/')) {
         event.respondWith(
             caches.match(request).then((cached) => {
