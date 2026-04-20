@@ -7,7 +7,8 @@ set -euo pipefail
 
 # На проде PHP 8.3 лежит в /opt/php83/bin. Префиксуем PATH, чтобы php/composer/artisan
 # подхватывали именно его, а не системный /usr/bin/php (обычно 8.1).
-export PATH="/opt/php83/bin:$PATH"
+# $HOME/bin — типичное место для локально установленных composer/nvm-shim и т.п.
+export PATH="$HOME/bin:/opt/php83/bin:$PATH"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
