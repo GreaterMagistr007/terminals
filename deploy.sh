@@ -36,9 +36,8 @@ git pull --ff-only "$TOKEN_URL" "$BRANCH"
 echo "==> composer install"
 composer install --no-dev --optimize-autoloader --no-interaction
 
-echo "==> frontend build"
-npm ci --no-audit --no-fund
-npm run build
+# Сборка фронта не запускается: на проде нет node/npm, public/build деплоится вручную
+# (или через отдельный пайплайн). Если нужен rebuild — делать локально и пушить /public/build.
 
 echo "==> migrations"
 php artisan migrate --force
