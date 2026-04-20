@@ -910,97 +910,104 @@ function buildVisitData() {
     };
 }
 
-// Сохранение визита
+/**
+ * Сохранение визита.
+ *
+ * Создание: offline-first — всегда кладём в IndexedDB через offlineQueueStore,
+ * отправку на сервер запускаем в фоне (не блокируем UI). AppLayout.vue
+ * подхватит отправку при появлении сети и периодически раз в минуту.
+ * Благодаря этому UI мгновенно возвращается на главную даже при плохом
+ * или «висящем» соединении, а визит гарантированно не теряется.
+ *
+ * Редактирование: синхронный PUT — offline-очередь поддерживает только создание.
+ */
 async function saveVisit() {
     saving.value = true;
-    try {
-        const formData = new FormData();
-        formData.append('visited_at', visitedAt.value);
-        if (usesWater.value) {
-            formData.append('water_main', water.main);
-            formData.append('water_spare', water.spare);
-        }
-        formData.append('comment', comment.value);
 
-        if (coords.value.latitude !== null) {
-            formData.append('latitude', coords.value.latitude);
-        }
-        if (coords.value.longitude !== null) {
-            formData.append('longitude', coords.value.longitude);
-        }
+    if (isEditMode.value) {
+        try {
+            const formData = new FormData();
+            formData.append('visited_at', visitedAt.value);
+            if (usesWater.value) {
+                formData.append('water_main', water.main);
+                formData.append('water_spare', water.spare);
+            }
+            formData.append('comment', comment.value);
 
-        // Фото: отправлять только новые файлы (не 'existing')
-        if (photos.inside && photos.inside !== 'existing') {
-            formData.append('photo_inside', photos.inside);
-        }
-        if (photos.outside && photos.outside !== 'existing') {
-            formData.append('photo_outside', photos.outside);
-        }
+            if (coords.value.latitude !== null) {
+                formData.append('latitude', coords.value.latitude);
+            }
+            if (coords.value.longitude !== null) {
+                formData.append('longitude', coords.value.longitude);
+            }
 
-        for (const file of commentPhotos.value) {
-            formData.append('comment_photos[]', file);
-        }
+            if (photos.inside && photos.inside !== 'existing') {
+                formData.append('photo_inside', photos.inside);
+            }
+            if (photos.outside && photos.outside !== 'existing') {
+                formData.append('photo_outside', photos.outside);
+            }
 
-        // Ингредиенты
-        const ingredientsData = ingredients.value
-            .filter(ing => ing.brought > 0 || ing.needed > 0)
-            .map(ing => ({
-                ingredient_id: ing.id,
-                brought: ing.brought,
-                needed: ing.needed,
-            }));
-        formData.append('ingredients', JSON.stringify(ingredientsData));
+            for (const file of commentPhotos.value) {
+                formData.append('comment_photos[]', file);
+            }
 
-        if (isEditMode.value) {
-            // Режим редактирования: PUT
+            const ingredientsData = ingredients.value
+                .filter(ing => ing.brought > 0 || ing.needed > 0)
+                .map(ing => ({
+                    ingredient_id: ing.id,
+                    brought: ing.brought,
+                    needed: ing.needed,
+                }));
+            formData.append('ingredients', JSON.stringify(ingredientsData));
+
             if (removedPhotoIds.value.length) {
                 formData.append('remove_photo_ids', JSON.stringify(removedPhotoIds.value));
             }
-            // Laravel не поддерживает PUT с FormData напрямую -- используем POST + _method
+            // Laravel не принимает PUT с FormData напрямую -- используем POST + _method
             formData.append('_method', 'PUT');
+
             await apiClient.post(`/service-visits/${editingVisitId.value}`, formData, {
                 headers: { 'Content-Type': 'multipart/form-data' },
             });
-        } else {
-            // Режим создания: POST
-            formData.append('terminal_id', route.params.id);
-            await apiClient.post('/service-visits', formData, {
-                headers: { 'Content-Type': 'multipart/form-data' },
-            });
-        }
 
-        // Успех — удалить черновик
-        await deleteDraft(Number(route.params.id));
-        router.push('/');
-    } catch (error) {
-        // Сетевая ошибка (нет response) или браузер offline -- сохранить в очередь
-        if (!error.response || !navigator.onLine) {
-            // Редактирование недоступно в offline-режиме
-            if (isEditMode.value) {
+            await deleteDraft(Number(route.params.id));
+            router.push('/');
+        } catch (error) {
+            if (!error.response || !navigator.onLine) {
                 showToast('error', 'Редактирование недоступно без интернета');
-                saving.value = false;
-                return;
+            } else {
+                const message = error.response?.data?.message
+                    || (error.response?.data?.errors && Object.values(error.response.data.errors).flat().join(', '))
+                    || 'Ошибка при сохранении';
+                showToast('error', message);
             }
+            saving.value = false;
+        }
+        return;
+    }
 
-            try {
-                const visitData = buildVisitData();
-                await offlineQueueStore.enqueue(visitData);
-                await deleteDraft(Number(route.params.id));
-                showToast('success', 'Нет интернета, но данные сохранены. Отправлю как появится интернет');
-                setTimeout(() => router.push('/'), 2000);
-                return;
-            } catch {
-                showToast('error', 'Не удалось сохранить данные локально');
-                saving.value = false;
-                return;
-            }
+    // Создание визита: всегда сохраняем локально, отправку отдаём в фон.
+    try {
+        const visitData = buildVisitData();
+        await offlineQueueStore.enqueue(visitData);
+        await deleteDraft(Number(route.params.id));
+
+        // Фоновая отправка: не ждём результат. Если сети нет — визит уже в очереди,
+        // AppLayout-синхронизатор отправит при появлении сети или на следующей итерации.
+        if (navigator.onLine) {
+            offlineQueueStore.syncAll()
+                .then((sent) => {
+                    if (sent > 0) {
+                        document.dispatchEvent(new CustomEvent('vendista:updated'));
+                    }
+                })
+                .catch(() => {});
         }
 
-        const message = error.response?.data?.message
-            || error.response?.data?.errors && Object.values(error.response.data.errors).flat().join(', ')
-            || 'Ошибка при сохранении';
-        showToast('error', message);
-    } finally {
+        router.push('/');
+    } catch {
+        showToast('error', 'Не удалось сохранить визит локально');
         saving.value = false;
     }
 }
