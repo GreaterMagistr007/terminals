@@ -42,16 +42,22 @@
 
         <!-- Контент шагов -->
         <main class="flex-1 overflow-y-auto px-4 pt-16 pb-32">
-            <!-- Блок "Нужно принести" с прошлого визита -->
-            <div v-if="neededItems.length && !neededDismissed"
+            <!-- Блок "Нужно принести" с прошлого визита (ингредиенты + комментарий) -->
+            <div v-if="(neededItems.length || lastVisitComment) && !neededDismissed"
                 class="mb-4 flex items-start gap-2 rounded-xl bg-amber-50 p-3 dark:bg-amber-900/20"
             >
                 <svg class="mt-0.5 h-4 w-4 shrink-0 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
                 </svg>
                 <div class="flex-1 min-w-0">
-                    <p class="text-xs font-semibold text-amber-700 dark:text-amber-400">Нужно принести:</p>
-                    <p class="mt-0.5 text-xs text-amber-600 dark:text-amber-300">{{ neededItemsText }}</p>
+                    <template v-if="neededItems.length">
+                        <p class="text-xs font-semibold text-amber-700 dark:text-amber-400">Нужно принести:</p>
+                        <p class="mt-0.5 text-xs text-amber-600 dark:text-amber-300">{{ neededItemsText }}</p>
+                    </template>
+                    <template v-if="lastVisitComment">
+                        <p class="text-xs font-semibold text-amber-700 dark:text-amber-400" :class="{ 'mt-2': neededItems.length }">Комментарий с прошлого визита:</p>
+                        <p class="mt-0.5 text-xs text-amber-600 dark:text-amber-300 whitespace-pre-wrap">{{ lastVisitComment }}</p>
+                    </template>
                 </div>
                 <button @click="neededDismissed = true" class="shrink-0 p-0.5 text-amber-400 active:text-amber-600 dark:text-amber-500">
                     <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -616,6 +622,12 @@ const neededItemsText = computed(() => {
     return neededItems.value
         .map(i => i.qty > 1 ? `${i.name.toLowerCase()} ${i.qty}` : i.name.toLowerCase())
         .join(', ');
+});
+
+/** Комментарий с прошлого визита — показываем в блоке-напоминании вместе с ингредиентами */
+const lastVisitComment = computed(() => {
+    const raw = terminal.value?.latest_visit?.comment;
+    return raw ? raw.trim() : '';
 });
 
 async function fetchTerminal() {
