@@ -127,9 +127,67 @@ php artisan tinker --execute='app(App\Services\TelegramService::class)->sendMess
 | Telegram возвращает `Unauthorized` | Токен бота недействителен | Проверить `TELEGRAM_BOT_TOKEN`, `curl .../getMe` |
 | `chat not found` | Бот не в чате / неверный `chat_id` (у супергруппы префикс `-100`) | Проверить `TELEGRAM_GROUP_CHAT_ID` |
 
+## Отправка фото: только multipart, не URL
+
+### Проблема
+
+При отправке фото визитов через `sendPhoto` / `sendMediaGroup` **по URL**
+(когда в `media[i]['media']` лежит публичная ссылка вида
+`https://termials.in-site.ru/storage/...`) Telegram-серверы **сами скачивают**
+файл с нашего сайта. Сервер в РФ, и встречный HTTP от Telegram-CDN к нам
+нестабилен — периодически приходит ошибка:
+
+```
+Telegram sendMediaGroup failed
+status: 400
+body: {"ok":false,"error_code":400,"description":"Bad Request: failed to send message #1 with the error message \"WEBPAGE_CURL_FAILED\""}
+```
+
+SOCKS5-прокси решает только исходящий трафик (мы → Telegram), а встречные
+запросы от Telegram к нам через него не идут.
+
+### Решение — multipart через `attach://`
+
+Файлы льём мы сами, бинарно, через тот же SOCKS5-прокси. Telegram ничего не
+скачивает с нашего сервера → класс ошибок `WEBPAGE_CURL_FAILED` исчезает.
+
+```php
+// TelegramService::sendPhoto — локальный путь → multipart
+$request = $this->http(true)->attach('photo', fopen($photo, 'r'), basename($photo));
+$response = $request->post("{$this->apiBaseUrl}/sendPhoto", $payload);
+
+// TelegramService::sendMediaGroup — attach://fileN + multipart
+foreach ($media as $index => &$item) {
+    if (!str_starts_with($item['media'], 'http') && is_file($item['media'])) {
+        $attachments[] = ['name' => "file{$index}", 'path' => $item['media']];
+        $item['media'] = "attach://file{$index}";
+    }
+}
+$request = $this->http(true);
+foreach ($attachments as $a) {
+    $request = $request->attach($a['name'], fopen($a['path'], 'r'), basename($a['path']));
+}
+$response = $request->post("{$this->apiBaseUrl}/sendMediaGroup", [
+    'chat_id' => $chatId,
+    'media' => json_encode($media),
+]);
+```
+
+`http(true)` возвращает `Http::asMultipart()` вместо `Http::asJson()`,
+прокси применяется так же, как для текстовых вызовов.
+
+### Правило для нового кода
+
+Фото в Telegram передаются **абсолютным путём к файлу на диске**
+(`Storage::disk('public')->path($photo->path)`), а не публичным URL.
+См. `ServiceVisitController::getPhotoPaths()`.
+
+URL-вариант в `sendPhoto` / `sendMediaGroup` оставлен как fallback — не удалять,
+но по умолчанию использовать только локальные пути.
+
 ## Ссылки
 
 - Полная инструкция по развёртыванию прокси (общая для всех проектов Vigbo):
   `/media/user/H_SSD_31/projects/constructor/docs/telegram-proxy-agent-instructions.md`
-- Эталонная реализация: проект **constructor** (saitora.ru),
+- Эталонная реализация прокси: проект **constructor** (saitora.ru),
   `app/Services/Notifications/TelegramNotifier.php`.
