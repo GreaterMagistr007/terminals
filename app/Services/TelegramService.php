@@ -25,10 +25,12 @@ class TelegramService
     /**
      * HTTP-клиент для вызовов Telegram Bot API.
      * Если задан TELEGRAM_PROXY — трафик идёт через SOCKS5 (обход блокировки в РФ).
+     *
+     * @param bool $multipart true — для отправки файлов (sendPhoto/sendMediaGroup с локальными путями).
      */
-    private function http(): PendingRequest
+    private function http(bool $multipart = false): PendingRequest
     {
-        $client = Http::asJson();
+        $client = $multipart ? Http::asMultipart() : Http::asJson();
 
         if ($this->proxy !== null) {
             $client = $client->withOptions(['proxy' => $this->proxy]);
@@ -95,13 +97,17 @@ class TelegramService
         return true;
     }
 
-    /** Отправка фото по URL */
-    public function sendPhoto(string $chatId, string $photoUrl, ?string $caption = null, ?string $parseMode = 'HTML'): bool
+    /**
+     * Отправка фото.
+     *
+     * @param string $photo Локальный путь к файлу (отправляется multipart — надёжнее)
+     *                      или публичный URL (Telegram сам скачает; может падать WEBPAGE_CURL_FAILED).
+     */
+    public function sendPhoto(string $chatId, string $photo, ?string $caption = null, ?string $parseMode = 'HTML'): bool
     {
-        $payload = [
-            'chat_id' => $chatId,
-            'photo' => $photoUrl,
-        ];
+        $isLocalFile = !str_starts_with($photo, 'http') && is_file($photo);
+
+        $payload = ['chat_id' => $chatId];
 
         if ($caption !== null) {
             $payload['caption'] = $caption;
@@ -111,7 +117,13 @@ class TelegramService
             $payload['parse_mode'] = $parseMode;
         }
 
-        $response = $this->http()->post("{$this->apiBaseUrl}/sendPhoto", $payload);
+        if ($isLocalFile) {
+            $request = $this->http(true)->attach('photo', fopen($photo, 'r'), basename($photo));
+            $response = $request->post("{$this->apiBaseUrl}/sendPhoto", $payload);
+        } else {
+            $payload['photo'] = $photo;
+            $response = $this->http()->post("{$this->apiBaseUrl}/sendPhoto", $payload);
+        }
 
         if (!$response->successful()) {
             Log::error('Telegram sendPhoto failed', [
@@ -128,15 +140,43 @@ class TelegramService
     /**
      * Отправка группы медиафайлов (до 10 фото).
      *
-     * @param string $chatId
-     * @param array $media Массив InputMediaPhoto: [['type' => 'photo', 'media' => 'url', 'caption' => '...', 'parse_mode' => 'HTML'], ...]
+     * В `media` поле `media` может быть:
+     *  - локальный путь к файлу → будет отправлен multipart через attach:// (надёжно, рекомендуется);
+     *  - публичный URL → Telegram скачает сам (может падать WEBPAGE_CURL_FAILED, если нас не видно из внешки).
+     *
+     * @param array $media Массив InputMediaPhoto:
+     *                     [['type' => 'photo', 'media' => '<path|url>', 'caption' => '...', 'parse_mode' => 'HTML'], ...]
      */
     public function sendMediaGroup(string $chatId, array $media): bool
     {
-        $response = $this->http()->post("{$this->apiBaseUrl}/sendMediaGroup", [
+        $attachments = [];
+        foreach ($media as $index => &$item) {
+            $src = $item['media'] ?? null;
+            if ($src !== null && !str_starts_with($src, 'http') && is_file($src)) {
+                $name = "file{$index}";
+                $attachments[] = [
+                    'name' => $name,
+                    'path' => $src,
+                ];
+                $item['media'] = "attach://{$name}";
+            }
+        }
+        unset($item);
+
+        $payload = [
             'chat_id' => $chatId,
             'media' => json_encode($media),
-        ]);
+        ];
+
+        if (!empty($attachments)) {
+            $request = $this->http(true);
+            foreach ($attachments as $a) {
+                $request = $request->attach($a['name'], fopen($a['path'], 'r'), basename($a['path']));
+            }
+            $response = $request->post("{$this->apiBaseUrl}/sendMediaGroup", $payload);
+        } else {
+            $response = $this->http()->post("{$this->apiBaseUrl}/sendMediaGroup", $payload);
+        }
 
         if (!$response->successful()) {
             Log::error('Telegram sendMediaGroup failed', [

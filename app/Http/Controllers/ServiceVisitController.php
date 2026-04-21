@@ -261,22 +261,22 @@ class ServiceVisitController extends Controller
             $telegramService = app(TelegramService::class);
 
             $text = $this->buildNotificationText($visit);
-            $photoUrls = $this->getPhotoUrls($visit);
+            $photoPaths = $this->getPhotoPaths($visit);
 
-            if (empty($photoUrls)) {
+            if (empty($photoPaths)) {
                 $telegramService->sendMessage($groupChatId, $text);
                 return;
             }
 
-            if (count($photoUrls) === 1) {
-                $telegramService->sendPhoto($groupChatId, $photoUrls[0], $text);
+            if (count($photoPaths) === 1) {
+                $telegramService->sendPhoto($groupChatId, $photoPaths[0], $text);
                 return;
             }
 
             // Несколько фото — отправляем группой, caption на первом
             $media = [];
-            foreach ($photoUrls as $index => $url) {
-                $item = ['type' => 'photo', 'media' => $url];
+            foreach ($photoPaths as $index => $path) {
+                $item = ['type' => 'photo', 'media' => $path];
                 if ($index === 0) {
                     $item['caption'] = $text;
                     $item['parse_mode'] = 'HTML';
@@ -286,7 +286,7 @@ class ServiceVisitController extends Controller
 
             $sent = $telegramService->sendMediaGroup($groupChatId, $media);
 
-            // Если sendMediaGroup не удался (URL недоступен) — отправить только текст
+            // Если sendMediaGroup не удался — отправить только текст
             if (!$sent) {
                 $telegramService->sendMessage($groupChatId, $text);
             }
@@ -350,17 +350,23 @@ class ServiceVisitController extends Controller
         return implode("\n", $lines);
     }
 
-    /** Получение публичных URL фото визита (inside, outside, comment) */
-    private function getPhotoUrls(ServiceVisit $visit): array
+    /**
+     * Получение локальных путей фото визита (inside, outside, comment)
+     * для отправки в Telegram как multipart-файлов.
+     */
+    private function getPhotoPaths(ServiceVisit $visit): array
     {
-        $appUrl = rtrim(config('app.url'), '/');
-        $urls = [];
+        $disk = Storage::disk('public');
+        $paths = [];
 
         foreach ($visit->photos as $photo) {
-            $urls[] = $appUrl . '/storage/' . $photo->path;
+            $absolute = $disk->path($photo->path);
+            if (is_file($absolute)) {
+                $paths[] = $absolute;
+            }
         }
 
-        return $urls;
+        return $paths;
     }
 
     /**
