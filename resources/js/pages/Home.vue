@@ -151,6 +151,12 @@
                         <p v-else class="text-xs text-gray-300 dark:text-gray-600">Нет данных</p>
                     </div>
 
+                    <!-- Комментарий прошлого визита (если есть) -->
+                    <div v-if="terminal.latest_visit?.comment?.trim()" class="mb-4">
+                        <p class="text-xs text-gray-400 dark:text-gray-500 mb-2">Комментарий</p>
+                        <p class="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{{ terminal.latest_visit.comment.trim() }}</p>
+                    </div>
+
                     <!-- Кнопки действий -->
                     <div class="flex gap-2">
                         <router-link :to="{ name: 'service', params: { id: terminal.id } }"
