@@ -12,6 +12,7 @@ use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Auth\LoginCodeController;
 use App\Http\Controllers\Auth\TelegramBotCallbackController;
 use App\Http\Controllers\Auth\TelegramWidgetController;
+use App\Http\Controllers\ClientErrorController;
 use App\Http\Controllers\SalesController;
 use App\Http\Controllers\ServiceVisitController;
 use Illuminate\Support\Facades\Route;
@@ -54,6 +55,9 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
     Route::get('/service-visits/{visit}', [ServiceVisitController::class, 'show']);
     Route::put('/service-visits/{visit}', [ServiceVisitController::class, 'update']);
 
+    // Логирование клиентских ошибок (offline-sync и т.п.)
+    Route::post('/client-errors', [ClientErrorController::class, 'store'])->middleware('throttle:60,1');
+
     // Админские маршруты
     Route::middleware('admin')->prefix('admin')->group(function () {
         Route::get('/users', [UserController::class, 'index']);
@@ -82,5 +86,10 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         Route::get('/vendista/terminals', [VendistaTerminalController::class, 'index']);
         Route::post('/vendista/terminals/sync', [VendistaTerminalController::class, 'sync']);
         Route::post('/vendista/transactions/sync', [VendistaTransactionController::class, 'sync']);
+
+        // Просмотр клиентских ошибок
+        Route::get('/client-errors', [ClientErrorController::class, 'index']);
+        Route::delete('/client-errors/clear', [ClientErrorController::class, 'clear']);
+        Route::delete('/client-errors/{clientError}', [ClientErrorController::class, 'destroy']);
     });
 });
