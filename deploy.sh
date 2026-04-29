@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
-# Деплой проекта на prod: git pull, composer, frontend-build, миграции, сброс и прогрев кэшей.
+# Деплой проекта на prod: git pull, миграции, сброс и прогрев кэшей.
+# Composer на хостинге недоступен -- vendor/ обновляется вручную (rsync/scp/архив).
 # Запуск: ./deploy.sh
 # GitHub PAT читается из файла .git-token рядом со скриптом (файл в .gitignore).
 
 set -euo pipefail
 
-# На проде PHP 8.3 лежит в /opt/php83/bin. Префиксуем PATH, чтобы php/composer/artisan
-# подхватывали именно его, а не системный /usr/bin/php (обычно 8.1).
-# $HOME/bin — типичное место для локально установленных composer/nvm-shim и т.п.
-export PATH="$HOME/bin:/opt/php83/bin:$PATH"
+# Полный путь к PHP 8.5 на хостинге pkfsb. Системный /usr/bin/php обычно старее.
+PHP="/opt/php85/bin/php"
+
+# $HOME/bin -- локальные шимы (на всякий случай для git и пр.).
+export PATH="$HOME/bin:$PATH"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
@@ -22,8 +24,13 @@ if [[ ! -r .git-token ]]; then
 fi
 GIT_TOKEN="$(tr -d '[:space:]' < .git-token)"
 
+if [[ ! -x "$PHP" ]]; then
+    echo "ERROR: $PHP не найден или не исполняемый" >&2
+    exit 1
+fi
+
 echo "==> Режим обслуживания"
-php artisan down --retry=5 || true
+"$PHP" artisan down --retry=5 || true
 
 echo "==> git pull"
 ORIG_URL="$(git remote get-url origin)"
@@ -33,25 +40,36 @@ TOKEN_URL="https://oauth2:${GIT_TOKEN}@${HOST_PATH}"
 BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 git pull --ff-only "$TOKEN_URL" "$BRANCH"
 
-echo "==> composer install"
-composer install --no-dev --optimize-autoloader --no-interaction
+# Сборка фронта не запускается: на проде нет node/npm, public/build деплоится вручную.
+# Composer на хостинге недоступен: vendor/ обновляется вручную, если нужны новые зависимости.
 
-# Сборка фронта не запускается: на проде нет node/npm, public/build деплоится вручную
-# (или через отдельный пайплайн). Если нужен rebuild — делать локально и пушить /public/build.
+# Чистим bootstrap/cache до любых artisan-команд: иначе закешированный
+# packages.php может ссылаться на dev-провайдеры (Pail и пр.), которых нет в vendor/.
+echo "==> очистка bootstrap-кеша"
+rm -f bootstrap/cache/packages.php \
+      bootstrap/cache/services.php \
+      bootstrap/cache/config.php \
+      bootstrap/cache/routes-v7.php \
+      bootstrap/cache/events.php
 
-echo "==> migrations"
-php artisan migrate --force
+# Пересобрать список провайдеров пакетов из текущего vendor/.
+# || true -- не валим деплой, если discover ругнётся на временное состояние.
+echo "==> package:discover"
+"$PHP" artisan package:discover --ansi || true
+
+echo "==> миграции"
+"$PHP" artisan migrate --force
 
 echo "==> clear + recache"
-php artisan config:clear
-php artisan cache:clear
-php artisan route:clear
-php artisan view:clear
-php artisan config:cache
-php artisan route:cache
-php artisan view:cache
+"$PHP" artisan config:clear
+"$PHP" artisan cache:clear
+"$PHP" artisan route:clear
+"$PHP" artisan view:clear
+"$PHP" artisan config:cache
+"$PHP" artisan route:cache
+"$PHP" artisan view:cache
 
-echo "==> up"
-php artisan up
+echo "==> снятие режима обслуживания"
+"$PHP" artisan up
 
 echo "==> deploy OK"

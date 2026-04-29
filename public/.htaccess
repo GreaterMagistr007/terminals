@@ -23,3 +23,21 @@
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteRule ^ index.php [L]
 </IfModule>
+
+# Service Worker и манифест PWA -- никогда не кэшировать у клиента,
+# иначе новый BUILD_ID не долетает до устройства.
+<IfModule mod_headers.c>
+    <FilesMatch "^(sw\.js|manifest\.json)$">
+        Header set Cache-Control "no-cache, no-store, must-revalidate"
+        Header set Pragma "no-cache"
+        Header set Expires "0"
+    </FilesMatch>
+</IfModule>
+
+# Vite-ассеты в /build имеют хеши в именах -- безопасно кэшировать долго.
+<IfModule mod_headers.c>
+    SetEnvIf Request_URI "^/build/" VITE_BUILD_ASSET
+    <FilesMatch "\.(js|css|woff2?|ttf|otf|svg|png|jpg|jpeg|webp|ico)$">
+        Header set Cache-Control "public, max-age=31536000, immutable" env=VITE_BUILD_ASSET
+    </FilesMatch>
+</IfModule>

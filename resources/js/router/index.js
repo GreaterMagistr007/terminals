@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
+import { applyPendingReloadIfSafe } from '@/bootstrap';
 import AppLayout from '@/layouts/AppLayout.vue';
 import Home from '@/pages/Home.vue';
 import Service from '@/pages/Service.vue';
@@ -183,6 +184,11 @@ const routes = [
                 name: 'admin-users',
                 component: () => import('@/pages/admin/Users.vue'),
             },
+            {
+                path: 'client-errors',
+                name: 'admin-client-errors',
+                component: () => import('@/pages/admin/ClientErrors.vue'),
+            },
         ],
     },
 ];
@@ -216,12 +222,29 @@ router.beforeEach(async (to) => {
     }
 });
 
-// Ошибка загрузки lazy-чанка (офлайн, админка) — не ломать приложение
+// Ошибка загрузки lazy-чанка (офлайн, админка) — не ломать приложение.
+// Это же может произойти, если SW обновился и старого хеша чанка больше нет
+// в /build/manifest.json -- в таком случае reload подтянет свежий бандл.
 router.onError((error, to) => {
-    if (error.message?.includes('Failed to fetch dynamically imported module') ||
-        error.message?.includes('Importing a module script failed')) {
+    const msg = error.message || '';
+    const isChunkError =
+        msg.includes('Failed to fetch dynamically imported module') ||
+        msg.includes('Importing a module script failed');
+
+    if (isChunkError) {
+        // Если уже на главной -- лишний цикл навигации не нужен; перезагрузим.
+        if (to?.name === 'home') {
+            window.location.reload();
+            return;
+        }
         router.push({ name: 'home' });
     }
+});
+
+// После каждой смены маршрута -- если service worker обновился, пока оператор
+// был в форме обслуживания, и теперь он ушёл с неё -- применяем отложенный reload.
+router.afterEach((to) => {
+    applyPendingReloadIfSafe(to.fullPath);
 });
 
 export default router;
