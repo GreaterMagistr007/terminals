@@ -10,6 +10,7 @@ import {
     getPendingCount,
     updateSyncStatus,
     deletePendingVisit,
+    resetAllSyncAttempts,
 } from '@/services/offlineDb';
 
 const MAX_SYNC_ATTEMPTS = 5;
@@ -18,6 +19,9 @@ export const useOfflineQueueStore = defineStore('offlineQueue', {
     state: () => ({
         pendingCount: 0,
         syncing: false,
+        // Последняя ошибка синхронизации (для отображения под баннером).
+        // { message, status, terminalId, visitId, at }
+        lastSyncError: null,
     }),
 
     actions: {
@@ -34,6 +38,16 @@ export const useOfflineQueueStore = defineStore('offlineQueue', {
         async enqueue(visitData) {
             await savePendingVisit(visitData);
             this.pendingCount = await getPendingCount();
+        },
+
+        /**
+         * Обнулить счётчик попыток у всех записей и попробовать синхронизировать заново.
+         * Возвращает количество успешно отправленных.
+         */
+        async retryAll() {
+            await resetAllSyncAttempts();
+            this.lastSyncError = null;
+            return this.syncAll();
         },
 
         /**
@@ -64,6 +78,8 @@ export const useOfflineQueueStore = defineStore('offlineQueue', {
 
                         await deletePendingVisit(visit.id);
                         sentCount++;
+                        // При успехе сбрасываем последнюю ошибку
+                        this.lastSyncError = null;
                     } catch (error) {
                         // Ошибка 419 (CSRF) -- обновить токен и повторить
                         if (error.response?.status === 419) {
@@ -76,21 +92,32 @@ export const useOfflineQueueStore = defineStore('offlineQueue', {
 
                                 await deletePendingVisit(visit.id);
                                 sentCount++;
+                                this.lastSyncError = null;
                                 continue;
-                            } catch {
-                                // Повторная попытка не удалась
+                            } catch (retryError) {
+                                // Повторная попытка не удалась -- пишем подробности
+                                recordError(this, visit, retryError, 'sync-retry-419');
                             }
                         }
 
                         // Сетевая ошибка (нет response) -- прекращаем синхронизацию
                         if (!error.response) {
                             await updateSyncStatus(visit.id, 'failed', 'Нет сети');
+                            this.lastSyncError = {
+                                message: 'Нет сети при отправке визита',
+                                status: null,
+                                terminalId: visit.terminalId,
+                                visitId: visit.id,
+                                at: new Date().toISOString(),
+                            };
+                            // Сетевые ошибки не логируем на сервер -- его всё равно не достать
                             break;
                         }
 
                         // Серверная ошибка -- помечаем и продолжаем
-                        const msg = error.response?.data?.message || 'Ошибка сервера';
+                        const msg = extractErrorMessage(error);
                         await updateSyncStatus(visit.id, 'failed', msg);
+                        recordError(this, visit, error, 'offline-sync');
                     }
                 }
             } finally {
@@ -102,6 +129,76 @@ export const useOfflineQueueStore = defineStore('offlineQueue', {
         },
     },
 });
+
+/**
+ * Извлечь читаемое сообщение из axios-ошибки.
+ */
+function extractErrorMessage(error) {
+    const status = error.response?.status;
+    const data = error.response?.data;
+
+    if (data?.message) return `[${status}] ${data.message}`;
+    if (data?.errors) {
+        const first = Object.values(data.errors)[0];
+        const text = Array.isArray(first) ? first[0] : String(first);
+        return `[${status}] ${text}`;
+    }
+    return `[${status ?? '?'}] ${error.message || 'Ошибка сервера'}`;
+}
+
+/**
+ * Сохранить ошибку в state и отправить на сервер (fire-and-forget).
+ * Серверный лог нужен, чтобы можно было отладить проблему оператора, не имея доступа к телефону.
+ */
+function recordError(store, visit, error, source) {
+    const message = extractErrorMessage(error);
+    store.lastSyncError = {
+        message,
+        status: error.response?.status ?? null,
+        terminalId: visit.terminalId,
+        visitId: visit.id,
+        at: new Date().toISOString(),
+    };
+
+    const context = {
+        visit_id: visit.id,
+        terminal_id: visit.terminalId,
+        terminal_name: visit.terminalName,
+        sync_attempts: visit.syncAttempts,
+        status: error.response?.status ?? null,
+        response_data: safeTrim(error.response?.data, 2000),
+        error_name: error.name,
+        error_code: error.code,
+        error_message: error.message,
+    };
+
+    // Не ждём ответа и не падаем при недоступности
+    apiClient
+        .post('/client-errors', {
+            source,
+            message,
+            context,
+            url: typeof window !== 'undefined' ? window.location.href : null,
+        })
+        .catch(() => {});
+}
+
+/**
+ * Безопасно сериализовать произвольное значение в строку с ограничением длины.
+ */
+function safeTrim(value, maxLength) {
+    if (value == null) return null;
+    let str;
+    try {
+        str = typeof value === 'string' ? value : JSON.stringify(value);
+    } catch {
+        str = String(value);
+    }
+    if (str.length > maxLength) {
+        return str.slice(0, maxLength) + '…';
+    }
+    return str;
+}
 
 /**
  * Собрать FormData из сохранённого визита (аналогично Service.vue).

@@ -50,15 +50,32 @@
             </div>
         </div>
 
-        <!-- Баннер ожидающих отправки визитов -->
-        <div v-if="offlineQueueStore.pendingCount > 0" class="mb-4 flex items-center gap-2 rounded-xl bg-amber-50 px-4 py-3 dark:bg-amber-900/20">
-            <svg class="h-5 w-5 shrink-0 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span class="text-sm font-medium text-amber-700 dark:text-amber-400">
-                Ожидает отправки: {{ offlineQueueStore.pendingCount }} визит{{ pendingVisitsSuffix }}
-            </span>
-        </div>
+        <!-- Баннер ожидающих отправки визитов (клик -- ручная переотправка) -->
+        <button
+            v-if="offlineQueueStore.pendingCount > 0"
+            type="button"
+            @click="retryPending"
+            :disabled="offlineQueueStore.syncing"
+            class="mb-4 flex w-full flex-col gap-1 rounded-xl bg-amber-50 px-4 py-3 text-left active:bg-amber-100 disabled:opacity-60 dark:bg-amber-900/20 dark:active:bg-amber-900/30"
+        >
+            <div class="flex items-center gap-2">
+                <svg class="h-5 w-5 shrink-0 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span class="text-sm font-medium text-amber-700 dark:text-amber-400">
+                    Ожидает отправки: {{ offlineQueueStore.pendingCount }} визит{{ pendingVisitsSuffix }}
+                </span>
+                <span class="ml-auto text-xs text-amber-600 dark:text-amber-500">
+                    {{ offlineQueueStore.syncing ? 'Отправка…' : 'Нажмите для повтора' }}
+                </span>
+            </div>
+            <p
+                v-if="offlineQueueStore.lastSyncError"
+                class="text-xs text-red-600 dark:text-red-400 break-words"
+            >
+                Ошибка: {{ offlineQueueStore.lastSyncError.message }}
+            </p>
+        </button>
 
         <!-- Загрузка -->
         <p v-if="loading" class="text-center text-sm text-gray-400 dark:text-gray-500">Загрузка...</p>
@@ -105,20 +122,20 @@
                                 <div class="flex items-center gap-2 mt-1">
                                     <div class="h-1.5 flex-1 rounded-full bg-gray-200 dark:bg-gray-700">
                                         <div class="h-1.5 rounded-full transition-all"
-                                            :class="estimatedWater(terminal).main > 0.2 ? 'bg-blue-400 dark:bg-blue-500' : 'bg-red-400 dark:bg-red-500'"
-                                            :style="{ width: (estimatedWater(terminal).main * 100) + '%' }"
+                                            :class="displayWater(terminal).main > 0.2 ? 'bg-blue-400 dark:bg-blue-500' : 'bg-red-400 dark:bg-red-500'"
+                                            :style="{ width: (displayWater(terminal).main * 100) + '%' }"
                                         ></div>
                                     </div>
-                                    <span class="text-xs font-semibold" :class="estimatedWater(terminal).main > 0.2 ? 'text-gray-600 dark:text-gray-300' : 'text-red-500 dark:text-red-400'">{{ estimatedWater(terminal).main.toFixed(1) }}</span>
+                                    <span class="text-xs font-semibold" :class="displayWater(terminal).main > 0.2 ? 'text-gray-600 dark:text-gray-300' : 'text-red-500 dark:text-red-400'">{{ displayWater(terminal).main.toFixed(1) }}</span>
                                 </div>
                                 <div class="flex items-center gap-2 mt-1">
                                     <div class="h-1.5 flex-1 rounded-full bg-gray-200 dark:bg-gray-700">
                                         <div class="h-1.5 rounded-full transition-all"
-                                            :class="estimatedWater(terminal).spare > 0.2 ? 'bg-cyan-400 dark:bg-cyan-500' : 'bg-red-400 dark:bg-red-500'"
-                                            :style="{ width: (estimatedWater(terminal).spare * 100) + '%' }"
+                                            :class="displayWater(terminal).spare > 0.2 ? 'bg-cyan-400 dark:bg-cyan-500' : 'bg-red-400 dark:bg-red-500'"
+                                            :style="{ width: (displayWater(terminal).spare * 100) + '%' }"
                                         ></div>
                                     </div>
-                                    <span class="text-xs font-semibold" :class="estimatedWater(terminal).spare > 0.2 ? 'text-gray-600 dark:text-gray-300' : 'text-red-500 dark:text-red-400'">{{ estimatedWater(terminal).spare.toFixed(1) }}</span>
+                                    <span class="text-xs font-semibold" :class="displayWater(terminal).spare > 0.2 ? 'text-gray-600 dark:text-gray-300' : 'text-red-500 dark:text-red-400'">{{ displayWater(terminal).spare.toFixed(1) }}</span>
                                 </div>
                             </template>
                             <p v-else class="mt-1 text-sm font-semibold text-gray-400">—</p>
@@ -159,7 +176,9 @@
 
                     <!-- Кнопки действий -->
                     <div class="flex gap-2">
-                        <router-link :to="{ name: 'service', params: { id: terminal.id } }"
+                        <button
+                            type="button"
+                            @click="onServiceButtonClick(terminal.id)"
                             class="flex-1 flex items-center justify-center gap-1.5 rounded-lg py-2.5 text-sm font-medium text-white active:opacity-80"
                             :class="hasDraft(terminal.id) ? 'bg-orange-500' : 'bg-blue-500'"
                         >
@@ -167,7 +186,7 @@
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75a4.5 4.5 0 01-4.884 4.484c-1.076-.091-2.264.071-2.95.904l-7.152 8.684a2.548 2.548 0 11-3.586-3.586l8.684-7.152c.833-.686.995-1.874.904-2.95a4.5 4.5 0 016.336-4.486l-3.276 3.276a3.004 3.004 0 002.25 2.25l3.276-3.276c.256.565.398 1.192.398 1.852z" />
                             </svg>
                             {{ hasDraft(terminal.id) ? 'Продолжить' : 'Обслужить' }}
-                        </router-link>
+                        </button>
                         <router-link :to="{ name: 'history', params: { id: terminal.id } }" class="flex items-center justify-center gap-1.5 rounded-lg bg-gray-100 px-4 py-2.5 text-sm font-medium text-gray-700 active:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:active:bg-gray-700">
                             <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -195,6 +214,28 @@
                 </div>
             </div>
         </div>
+
+        <!-- Модалка "Продолжить / Начать новое" при наличии черновика -->
+        <div v-if="continueModal.visible" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="continueModal.visible = false">
+            <div class="mx-4 w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl dark:bg-gray-800">
+                <h3 class="text-base font-bold text-gray-900 dark:text-white">Продолжить обслуживание или начать новое?</h3>
+                <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">У этой точки уже есть незавершённый визит. Можно продолжить с того же места или сбросить и начать заново.</p>
+                <div class="mt-5 flex flex-col gap-2">
+                    <button
+                        @click="continueExistingDraft"
+                        class="rounded-xl bg-blue-500 py-2.5 text-sm font-semibold text-white active:bg-blue-600"
+                    >Продолжить</button>
+                    <button
+                        @click="startNewVisit"
+                        class="rounded-xl bg-orange-500 py-2.5 text-sm font-semibold text-white active:bg-orange-600"
+                    >Начать новое</button>
+                    <button
+                        @click="continueModal.visible = false"
+                        class="rounded-xl bg-gray-100 py-2.5 text-sm font-semibold text-gray-700 active:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:active:bg-gray-600"
+                    >Отмена</button>
+                </div>
+            </div>
+        </div>
     </div>
 </template>
 
@@ -204,7 +245,8 @@ import { useRouter } from 'vue-router';
 import apiClient from '@/api/client';
 import { useOfflineQueueStore } from '@/stores/offlineQueue';
 import { useTerminalsStore } from '@/stores/terminals';
-import { getAllDrafts } from '@/services/offlineDb';
+import { getAllDrafts, deleteDraft } from '@/services/offlineDb';
+import { estimateWater, roundWater } from '@/services/waterEstimate';
 
 const router = useRouter();
 const offlineQueueStore = useOfflineQueueStore();
@@ -256,43 +298,13 @@ const draftTerminalIds = ref(new Set());
 const IRKUTSK_TZ = 'Asia/Irkutsk';
 const SETTINGS_KEY = 'terminals_home_settings';
 
-// Константы расхода воды (будут заменены реальными рецептами)
-const BOTTLE_VOLUME_ML = 18900; // объём полной бутылки, мл
-const WATER_PER_CUP_ML = 340;  // расход воды на стакан, мл
-
 /**
- * Расчёт оставшейся воды с учётом продаж.
- * - Без разветвителя: расход идёт из основной, при опустошении — из запасной.
- * - С разветвителем (settings.water_split): обе бутылки расходуются параллельно
- *   по WATER_PER_CUP_ML/2 за продажу, не «перетекая» одна в другую.
+ * Остаток воды для отображения: общий расчёт + округление до 0.1
+ * (единый формат с экраном обслуживания, без расхождений из-за floating-point).
  */
-function estimatedWater(terminal) {
-    if (!terminal.latest_visit) return { main: 0, spare: 0 };
-    const mainMl = (terminal.latest_visit.water_main ?? 0) * BOTTLE_VOLUME_ML;
-    const spareMl = (terminal.latest_visit.water_spare ?? 0) * BOTTLE_VOLUME_ML;
-    const sales = terminal.sales_since_last_visit ?? 0;
-
-    if (terminal.settings?.water_split) {
-        const perBottleMl = sales * (WATER_PER_CUP_ML / 2);
-        return {
-            main: Math.min(1, Math.max(0, mainMl - perBottleMl) / BOTTLE_VOLUME_ML),
-            spare: Math.min(1, Math.max(0, spareMl - perBottleMl) / BOTTLE_VOLUME_ML),
-        };
-    }
-
-    const usedMl = sales * WATER_PER_CUP_ML;
-    let remainingMain = mainMl - usedMl;
-    let remainingSpare = spareMl;
-
-    if (remainingMain < 0) {
-        remainingSpare = Math.max(0, spareMl + remainingMain);
-        remainingMain = 0;
-    }
-
-    return {
-        main: Math.min(1, remainingMain / BOTTLE_VOLUME_ML),
-        spare: Math.min(1, remainingSpare / BOTTLE_VOLUME_ML),
-    };
+function displayWater(terminal) {
+    const w = estimateWater(terminal);
+    return { main: roundWater(w.main), spare: roundWater(w.spare) };
 }
 
 const terminals = computed(() => terminalsStore.terminals);
@@ -348,6 +360,63 @@ function confirmEditVisit(terminalId) {
 function goToEditVisit() {
     editModal.visible = false;
     router.push({ name: 'service', params: { id: editModal.terminalId }, query: { edit: 'last' } });
+}
+
+// Модалка выбора действия при наличии черновика обслуживания
+const continueModal = reactive({ visible: false, terminalId: null });
+
+/**
+ * Клик по кнопке "Обслужить" / "Продолжить" на карточке терминала.
+ * Если у точки есть незавершённый черновик -- спрашиваем пользователя,
+ * иначе сразу переходим к новой форме обслуживания.
+ */
+function onServiceButtonClick(terminalId) {
+    if (hasDraft(terminalId)) {
+        continueModal.terminalId = terminalId;
+        continueModal.visible = true;
+        return;
+    }
+    router.push({ name: 'service', params: { id: terminalId } });
+}
+
+function continueExistingDraft() {
+    const id = continueModal.terminalId;
+    continueModal.visible = false;
+    router.push({ name: 'service', params: { id } });
+}
+
+async function startNewVisit() {
+    const id = continueModal.terminalId;
+    continueModal.visible = false;
+    // Удаляем черновик -- Service.vue стартует с пустой формы и текущей датой.
+    await deleteDraft(Number(id)).catch(() => {});
+    await loadDrafts();
+    router.push({ name: 'service', params: { id } });
+}
+
+/**
+ * Ручная повторная отправка ожидающих визитов.
+ * Обнуляет syncAttempts для всех записей и запускает syncAll.
+ */
+async function retryPending() {
+    if (offlineQueueStore.syncing) return;
+
+    document.dispatchEvent(new CustomEvent('app:toast', {
+        detail: { message: 'Визиты, ожидающие отправки, переотправляются', type: 'success' },
+    }));
+
+    const sent = await offlineQueueStore.retryAll();
+
+    if (sent > 0) {
+        document.dispatchEvent(new CustomEvent('app:toast', {
+            detail: { message: `Отправлено визитов: ${sent}`, type: 'success' },
+        }));
+        document.dispatchEvent(new CustomEvent('vendista:updated'));
+    } else if (offlineQueueStore.lastSyncError) {
+        document.dispatchEvent(new CustomEvent('app:toast', {
+            detail: { message: 'Ошибка: ' + offlineQueueStore.lastSyncError.message, type: 'error' },
+        }));
+    }
 }
 
 /**

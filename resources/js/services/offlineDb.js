@@ -124,6 +124,30 @@ export async function updateSyncStatus(id, status, error = null) {
     });
 }
 
+/**
+ * Сбросить счётчик попыток у всех ожидающих визитов.
+ * Используется при ручной повторной отправке (клик по баннеру на Home).
+ */
+export async function resetAllSyncAttempts() {
+    const db = await openDb();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_PENDING, 'readwrite');
+        const store = tx.objectStore(STORE_PENDING);
+        const req = store.getAll();
+        req.onsuccess = () => {
+            const records = req.result || [];
+            for (const r of records) {
+                r.syncAttempts = 0;
+                r.syncStatus = 'pending';
+                r.syncError = null;
+                store.put(r);
+            }
+        };
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+    });
+}
+
 /** Удалить визит после успешной синхронизации. */
 export async function deletePendingVisit(id) {
     const db = await openDb();

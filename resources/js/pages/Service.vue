@@ -69,11 +69,18 @@
             <!-- Дата и время обслуживания (шаг 1 и шаг 4) -->
             <div v-if="currentStep === 1 || currentStep === totalSteps" class="mb-5 rounded-2xl bg-white p-4 shadow-sm dark:bg-gray-900">
                 <label class="mb-2 block text-sm font-semibold text-gray-700 dark:text-gray-300">Дата и время обслуживания</label>
-                <input
-                    type="datetime-local"
-                    v-model="visitedAt"
-                    class="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-900 focus:border-blue-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-400 dark:border-gray-700 dark:bg-gray-800 dark:text-white dark:focus:border-blue-500"
-                />
+                <div class="flex gap-2">
+                    <input
+                        type="datetime-local"
+                        v-model="visitedAt"
+                        class="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-900 focus:border-blue-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-400 dark:border-gray-700 dark:bg-gray-800 dark:text-white dark:focus:border-blue-500"
+                    />
+                    <button
+                        type="button"
+                        @click="setVisitedAtNow"
+                        class="shrink-0 rounded-xl bg-blue-50 px-3 py-2.5 text-sm font-medium text-blue-600 active:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:active:bg-blue-900/40"
+                    >Сейчас</button>
+                </div>
             </div>
 
             <!-- Шаг: Вода (только для точек с водой) -->
@@ -467,6 +474,7 @@ import apiClient from '@/api/client';
 import { useOfflineQueueStore } from '@/stores/offlineQueue';
 import { useTerminalsStore } from '@/stores/terminals';
 import { saveDraft, getDraft, deleteDraft } from '@/services/offlineDb';
+import { estimateWater, roundWater } from '@/services/waterEstimate';
 
 const router = useRouter();
 const route = useRoute();
@@ -512,8 +520,11 @@ function nowIrkutsk() {
 
 const visitedAt = ref(nowIrkutsk());
 
-const BOTTLE_VOLUME_ML = 18900;
-const WATER_PER_CUP_ML = 340;
+/** Установить дату/время обслуживания на текущий момент (по Иркутску). */
+function setVisitedAtNow() {
+    visitedAt.value = nowIrkutsk();
+}
+
 const water = reactive({ main: 0.5, spare: 0.0 });
 
 const ingredients = ref([]);
@@ -662,34 +673,11 @@ async function fetchTerminal() {
             }));
     }
 
-    // Расчётный уровень воды (та же логика, что на Home.vue)
-    const lv = terminalData.latest_visit;
-    if (lv) {
-        const mainMl = (lv.water_main ?? 0) * BOTTLE_VOLUME_ML;
-        const spareMl = (lv.water_spare ?? 0) * BOTTLE_VOLUME_ML;
-        const sales = terminalData.sales_since_last_visit ?? 0;
-
-        let remainingMain;
-        let remainingSpare;
-
-        if (terminalData.settings?.water_split) {
-            // Разветвитель: обе бутылки расходуются параллельно, по половине на продажу.
-            const perBottleMl = sales * (WATER_PER_CUP_ML / 2);
-            remainingMain = Math.max(0, mainMl - perBottleMl);
-            remainingSpare = Math.max(0, spareMl - perBottleMl);
-        } else {
-            // Без разветвителя: сначала тратится основная, потом запасная.
-            const usedMl = sales * WATER_PER_CUP_ML;
-            remainingMain = mainMl - usedMl;
-            remainingSpare = spareMl;
-            if (remainingMain < 0) {
-                remainingSpare = Math.max(0, spareMl + remainingMain);
-                remainingMain = 0;
-            }
-        }
-
-        water.main = Math.round(Math.min(1, Math.max(0, remainingMain / BOTTLE_VOLUME_ML)) * 10) / 10;
-        water.spare = Math.round(Math.min(1, Math.max(0, remainingSpare / BOTTLE_VOLUME_ML)) * 10) / 10;
+    // Расчётный уровень воды через единый хелпер (та же логика, что на Home.vue)
+    if (terminalData.latest_visit) {
+        const w = estimateWater(terminalData);
+        water.main = roundWater(w.main);
+        water.spare = roundWater(w.spare);
     }
 }
 

@@ -123,7 +123,7 @@ class ServiceVisitController extends Controller
         // Ротация старых фотографий
         $this->rotatePhotos($visit->terminal_id);
 
-        $visit->load(['ingredients.ingredient', 'photos', 'user:id,name', 'terminal']);
+        $visit->load(['ingredients.ingredient', 'photos', 'user:id,name', 'terminal.settings']);
 
         // Уведомление в Telegram-группу (не блокирует ответ)
         $this->sendTelegramNotification($visit);
@@ -301,7 +301,10 @@ class ServiceVisitController extends Controller
     /** Формирование текста уведомления об обслуживании */
     private function buildNotificationText(ServiceVisit $visit): string
     {
-        $terminalName = $visit->terminal->comment ?? "Терминал #{$visit->terminal_id}";
+        // Приоритет: название точки из админки → comment Vendista → ID
+        $terminalName = $visit->terminal->settings?->short_name
+            ?: $visit->terminal->comment
+            ?: "Терминал #{$visit->terminal_id}";
         $operatorName = $visit->user->name ?? 'Неизвестный';
         $visitedAt = $visit->visited_at->timezone('Asia/Irkutsk')->format('d.m.Y H:i');
 

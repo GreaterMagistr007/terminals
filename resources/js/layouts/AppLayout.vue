@@ -10,7 +10,10 @@
             leave-to-class="translate-y-[-100%] opacity-0"
         >
             <div v-if="toast.visible" class="fixed inset-x-0 top-0 z-50 px-4 pt-4">
-                <div class="rounded-xl bg-green-500 px-4 py-3 text-sm font-medium text-white shadow-lg">
+                <div
+                    class="rounded-xl px-4 py-3 text-sm font-medium text-white shadow-lg"
+                    :class="toast.type === 'error' ? 'bg-red-500' : 'bg-green-500'"
+                >
                     {{ toast.message }}
                 </div>
             </div>
@@ -92,15 +95,23 @@ const terminalsStore = useTerminalsStore();
 const { isOnline } = useOnlineStatus();
 const showMenu = ref(false);
 
-// Тост для уведомлений о синхронизации
-const toast = reactive({ visible: false, message: '' });
+// Тост для уведомлений (success / error)
+const toast = reactive({ visible: false, message: '', type: 'success' });
 let toastTimer = null;
 
-function showToast(message) {
+function showToast(message, type = 'success') {
     toast.visible = true;
     toast.message = message;
+    toast.type = type;
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => { toast.visible = false; }, 3000);
+}
+
+// Глобальный канал тостов: любой компонент может вызвать
+// document.dispatchEvent(new CustomEvent('app:toast', { detail: { message, type } }))
+function onAppToast(event) {
+    const { message, type } = event.detail || {};
+    if (message) showToast(message, type || 'success');
 }
 
 const initials = computed(() => {
@@ -154,11 +165,13 @@ onMounted(() => {
     fetchIntervalId = setInterval(backgroundFetch, FETCH_INTERVAL_MS);
 
     window.addEventListener('online', onOnline);
+    document.addEventListener('app:toast', onAppToast);
 });
 
 onBeforeUnmount(() => {
     if (fetchIntervalId) clearInterval(fetchIntervalId);
     window.removeEventListener('online', onOnline);
+    document.removeEventListener('app:toast', onAppToast);
     clearTimeout(toastTimer);
 });
 </script>
