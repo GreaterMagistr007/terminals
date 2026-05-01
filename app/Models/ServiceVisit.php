@@ -11,6 +11,7 @@ class ServiceVisit extends Model
     protected $fillable = [
         'terminal_id',
         'user_id',
+        'client_uuid',
         'visited_at',
         'water_main',
         'water_spare',

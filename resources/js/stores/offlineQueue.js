@@ -207,6 +207,9 @@ function safeTrim(value, maxLength) {
 function buildFormData(visit) {
     const formData = new FormData();
 
+    // visit.id (UUID из IndexedDB) служит idempotency-ключом: при повторной отправке
+    // того же визита бэк вернёт уже созданную запись, без второго уведомления в Telegram.
+    formData.append('client_uuid', visit.id);
     formData.append('terminal_id', visit.terminalId);
     formData.append('visited_at', visit.visitedAt);
 

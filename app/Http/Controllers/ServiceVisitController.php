@@ -6,10 +6,11 @@ use App\Models\ServiceVisit;
 use App\Models\ServiceVisitIngredient;
 use App\Models\ServiceVisitPhoto;
 use App\Services\TelegramService;
+use Carbon\Carbon;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
-use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -19,9 +20,6 @@ class ServiceVisitController extends Controller
 {
     /**
      * Список визитов обслуживания для терминала.
-     *
-     * @param Request $request
-     * @return JsonResponse
      */
     public function index(Request $request): JsonResponse
     {
@@ -44,14 +42,12 @@ class ServiceVisitController extends Controller
 
     /**
      * Сохранение нового визита обслуживания.
-     *
-     * @param Request $request
-     * @return JsonResponse
      */
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
             'terminal_id' => ['required', 'integer', 'exists:vendista_terminals,id'],
+            'client_uuid' => ['nullable', 'uuid'],
             'visited_at' => ['required', 'date'],
             'water_main' => ['nullable', 'numeric', 'between:0,1'],
             'water_spare' => ['nullable', 'numeric', 'between:0,1'],
@@ -65,45 +61,72 @@ class ServiceVisitController extends Controller
             'ingredients' => ['nullable', 'json'],
         ]);
 
+        // Идемпотентность: повторная отправка того же визита (потеря 201 у клиента, ретрай
+        // оффлайн-очереди) не должна создавать дубль и второе уведомление в Telegram.
+        // Ключ — visit.id из IndexedDB, передаётся клиентом как client_uuid.
+        if (! empty($validated['client_uuid'])) {
+            $existing = ServiceVisit::where('client_uuid', $validated['client_uuid'])
+                ->with(['ingredients.ingredient', 'photos', 'user:id,name', 'terminal.settings'])
+                ->first();
+            if ($existing) {
+                return response()->json(['visit' => $existing]);
+            }
+        }
+
         // Декодирование ингредиентов из JSON
         $ingredientsData = [];
-        if (!empty($validated['ingredients'])) {
+        if (! empty($validated['ingredients'])) {
             $ingredientsData = json_decode($validated['ingredients'], true);
-            if (!is_array($ingredientsData)) {
+            if (! is_array($ingredientsData)) {
                 return response()->json(['message' => 'Некорректный формат ингредиентов'], 422);
             }
         }
 
-        $visit = DB::transaction(function () use ($validated, $ingredientsData) {
-            // Создание визита (время приходит в Asia/Irkutsk, конвертируем в UTC)
-            $visit = ServiceVisit::create([
-                'terminal_id' => $validated['terminal_id'],
-                'user_id' => Auth::id(),
-                'visited_at' => Carbon::parse($validated['visited_at'], 'Asia/Irkutsk')->utc(),
-                'water_main' => $validated['water_main'] ?? null,
-                'water_spare' => $validated['water_spare'] ?? null,
-                'comment' => $validated['comment'] ?? null,
-                'latitude' => $validated['latitude'] ?? null,
-                'longitude' => $validated['longitude'] ?? null,
-            ]);
+        try {
+            $visit = DB::transaction(function () use ($validated, $ingredientsData) {
+                // Создание визита (время приходит в Asia/Irkutsk, конвертируем в UTC)
+                $visit = ServiceVisit::create([
+                    'terminal_id' => $validated['terminal_id'],
+                    'user_id' => Auth::id(),
+                    'client_uuid' => $validated['client_uuid'] ?? null,
+                    'visited_at' => Carbon::parse($validated['visited_at'], 'Asia/Irkutsk')->utc(),
+                    'water_main' => $validated['water_main'] ?? null,
+                    'water_spare' => $validated['water_spare'] ?? null,
+                    'comment' => $validated['comment'] ?? null,
+                    'latitude' => $validated['latitude'] ?? null,
+                    'longitude' => $validated['longitude'] ?? null,
+                ]);
 
-            // Сохранение ингредиентов (только если brought > 0 или needed > 0)
-            foreach ($ingredientsData as $item) {
-                $brought = (int) ($item['brought'] ?? 0);
-                $needed = (int) ($item['needed'] ?? 0);
+                // Сохранение ингредиентов (только если brought > 0 или needed > 0)
+                foreach ($ingredientsData as $item) {
+                    $brought = (int) ($item['brought'] ?? 0);
+                    $needed = (int) ($item['needed'] ?? 0);
 
-                if ($brought > 0 || $needed > 0) {
-                    ServiceVisitIngredient::create([
-                        'service_visit_id' => $visit->id,
-                        'ingredient_id' => $item['ingredient_id'],
-                        'brought' => $brought,
-                        'needed' => $needed,
-                    ]);
+                    if ($brought > 0 || $needed > 0) {
+                        ServiceVisitIngredient::create([
+                            'service_visit_id' => $visit->id,
+                            'ingredient_id' => $item['ingredient_id'],
+                            'brought' => $brought,
+                            'needed' => $needed,
+                        ]);
+                    }
+                }
+
+                return $visit;
+            });
+        } catch (UniqueConstraintViolationException $e) {
+            // Гонка двух конкурентных ретраев с одним client_uuid: оба прошли fast-path, второй
+            // упал на unique-индексе. Возвращаем уже созданный визит, без повторной обработки.
+            if (! empty($validated['client_uuid'])) {
+                $existing = ServiceVisit::where('client_uuid', $validated['client_uuid'])
+                    ->with(['ingredients.ingredient', 'photos', 'user:id,name', 'terminal.settings'])
+                    ->first();
+                if ($existing) {
+                    return response()->json(['visit' => $existing]);
                 }
             }
-
-            return $visit;
-        });
+            throw $e;
+        }
 
         // Сохранение фотографий (за пределами транзакции — файловые операции)
         if ($request->hasFile('photo_inside')) {
@@ -133,9 +156,6 @@ class ServiceVisitController extends Controller
 
     /**
      * Детальная информация о визите.
-     *
-     * @param ServiceVisit $visit
-     * @return JsonResponse
      */
     public function show(ServiceVisit $visit): JsonResponse
     {
@@ -146,10 +166,6 @@ class ServiceVisitController extends Controller
 
     /**
      * Обновление визита обслуживания.
-     *
-     * @param Request $request
-     * @param ServiceVisit $visit
-     * @return JsonResponse
      */
     public function update(Request $request, ServiceVisit $visit): JsonResponse
     {
@@ -169,9 +185,9 @@ class ServiceVisitController extends Controller
         ]);
 
         $ingredientsData = [];
-        if (!empty($validated['ingredients'])) {
+        if (! empty($validated['ingredients'])) {
             $ingredientsData = json_decode($validated['ingredients'], true);
-            if (!is_array($ingredientsData)) {
+            if (! is_array($ingredientsData)) {
                 return response()->json(['message' => 'Некорректный формат ингредиентов'], 422);
             }
         }
@@ -204,7 +220,7 @@ class ServiceVisitController extends Controller
         });
 
         // Удаление указанных фото
-        if (!empty($validated['remove_photo_ids'])) {
+        if (! empty($validated['remove_photo_ids'])) {
             $removeIds = json_decode($validated['remove_photo_ids'], true);
             if (is_array($removeIds)) {
                 $photosToRemove = $visit->photos()->whereIn('id', $removeIds)->get();
@@ -265,11 +281,13 @@ class ServiceVisitController extends Controller
 
             if (empty($photoPaths)) {
                 $telegramService->sendMessage($groupChatId, $text);
+
                 return;
             }
 
             if (count($photoPaths) === 1) {
                 $telegramService->sendPhoto($groupChatId, $photoPaths[0], $text);
+
                 return;
             }
 
@@ -287,7 +305,7 @@ class ServiceVisitController extends Controller
             $sent = $telegramService->sendMediaGroup($groupChatId, $media);
 
             // Если sendMediaGroup не удался — отправить только текст
-            if (!$sent) {
+            if (! $sent) {
                 $telegramService->sendMessage($groupChatId, $text);
             }
         } catch (\Throwable $e) {
@@ -345,7 +363,7 @@ class ServiceVisitController extends Controller
         }
 
         // Комментарий
-        if (!empty($visit->comment)) {
+        if (! empty($visit->comment)) {
             $lines[] = '';
             $lines[] = $visit->comment;
         }
@@ -375,14 +393,12 @@ class ServiceVisitController extends Controller
     /**
      * Сжатие и сохранение фотографии визита.
      *
-     * @param ServiceVisit $visit
-     * @param UploadedFile $file
-     * @param string $type Тип фото: inside, outside, comment
+     * @param  string  $type  Тип фото: inside, outside, comment
      */
     private function savePhoto(ServiceVisit $visit, UploadedFile $file, string $type): void
     {
         $originalName = $file->getClientOriginalName();
-        $filename = $type . '_' . uniqid() . '.jpg';
+        $filename = $type.'_'.uniqid().'.jpg';
         $directory = "visits/{$visit->terminal_id}/{$visit->id}";
         $path = "{$directory}/{$filename}";
 
@@ -402,7 +418,7 @@ class ServiceVisitController extends Controller
     /**
      * Сжатие изображения: ресайз если сторона > 1920px, JPEG quality 75%.
      *
-     * @param string $sourcePath Путь к исходному файлу
+     * @param  string  $sourcePath  Путь к исходному файлу
      * @return string Бинарные данные сжатого JPEG
      */
     private function compressImage(string $sourcePath): string
@@ -451,8 +467,6 @@ class ServiceVisitController extends Controller
     /**
      * Ротация фотографий: оставить фото только для 3 последних визитов терминала.
      * Более старые фото удаляются (файлы + записи БД).
-     *
-     * @param int $terminalId
      */
     private function rotatePhotos(int $terminalId): void
     {

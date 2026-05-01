@@ -31,6 +31,17 @@ buildVisitData() → offlineQueueStore.enqueue() → deleteDraft() → router.pu
 | `resources/js/layouts/AppLayout.vue` | `backgroundFetch` раз в минуту + listener `online` → `syncAll`. `showToast(message, type='success'\|'error')` + слушатель события `'app:toast'` через document. |
 | `resources/js/pages/Home.vue` | Кликабельный баннер: `pendingCount > 0` → `retryAll()` + тост «переотправляются». При ошибке — красный тост и подпись с `lastSyncError.message`. |
 
+### Идемпотентность отправки
+
+Сервер может успешно создать визит, но 201-ответ потеряться в дороге (плохая сеть, мобильный браузер ушёл в background, таймаут прокси). Без защиты следующий тик `syncAll` отправит тот же визит ещё раз → второй `ServiceVisit` в БД, второе уведомление в Telegram.
+
+Защита — idempotency-ключ. У каждой записи в IndexedDB есть `id: crypto.randomUUID()` (`offlineDb.js`). `buildFormData` кладёт его в `client_uuid` поле. Бэк (`ServiceVisitController::store`):
+
+1. Если в БД уже есть `service_visit` с этим `client_uuid` — возвращает существующий (`200`), без создания, без фото, без ротации, без Telegram. Клиент удаляет запись из IndexedDB как при обычном успехе.
+2. Иначе создаёт визит с этим `client_uuid` внутри `DB::transaction`. Если параллельный ретрай выиграл гонку — `INSERT` падает на unique-индексе `service_visits.client_uuid`, ловим `UniqueConstraintViolationException`, возвращаем уже созданный визит.
+
+Поле `client_uuid` (`CHAR(36) NULLABLE UNIQUE`, миграция `2026_05_01_000000_add_client_uuid_to_service_visits`) — nullable: сторонние клиенты без UUID получают старое поведение, но без идемпотентности. Редактирование (PUT) не передаёт `client_uuid` и идёт мимо этого механизма.
+
 ### Manual retry
 
 `MAX_SYNC_ATTEMPTS = 5`: после 5 неудачных попыток визит молча пропускается в `syncAll`. Оператор кликает по баннеру → `retryAll()` = `resetAllSyncAttempts()` (всем pending записям обнуляется `syncAttempts`) + `syncAll()`.

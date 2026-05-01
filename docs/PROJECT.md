@@ -188,7 +188,7 @@
 - **Point** — id, name, address, latitude (decimal, nullable), longitude (decimal, nullable), comment, is_active, created_at, updated_at. Связь 1:1 с Machine.
 - **Machine** — id, point_id (unique, FK), model, serial_number, comment, created_at, updated_at.
 - **Ingredient** — id, name, unit (по умолчанию "упаковка"), cost_per_unit (decimal, стоимость за упаковку), is_active, created_at, updated_at.
-- **ServiceVisit** — id, point_id (FK), user_id (FK), visited_at (datetime), water_main (decimal, подключённая бутылка), water_spare (decimal, nullable, запасная бутылка), comment (text, nullable), photo_inside_path (string), photo_outside_path (string), latitude (decimal, nullable), longitude (decimal, nullable), synced_at (datetime, nullable — для офлайн-синхронизации), created_at, updated_at.
+- **ServiceVisit** — id, point_id (FK), user_id (FK), client_uuid (CHAR(36) nullable unique — idempotency-ключ, совпадает с id записи в IndexedDB на клиенте; см. OFFLINE_PWA.md), visited_at (datetime), water_main (decimal, подключённая бутылка), water_spare (decimal, nullable, запасная бутылка), comment (text, nullable), photo_inside_path (string), photo_outside_path (string), latitude (decimal, nullable), longitude (decimal, nullable), synced_at (datetime, nullable — для офлайн-синхронизации), created_at, updated_at.
 - **ServiceVisitIngredient** — id, service_visit_id (FK), ingredient_id (FK), quantity (decimal), type (enum: brought/needed).
 
 ### Будущие сущности (после MVP)
