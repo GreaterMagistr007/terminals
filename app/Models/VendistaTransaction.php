@@ -45,9 +45,17 @@ class VendistaTransaction extends Model
         return $this->belongsTo(VendistaTerminal::class, 'term_id', 'vendista_id');
     }
 
-    // Единое определение «стакан = успешная продажа без возврата».
-    // reverse_id != 0 у обеих записей пары (оригинал и возвратная) — фильтр отсекает обе.
-    public function scopeSuccessful(Builder $query): Builder
+    // Стакан физически налит. status=4 — возвратная запись (вода не лилась);
+    // status=1 — обычная продажа, включая бонусную (sum=0); status=2 — оригинал, по
+    // которому позже был возврат (вода уже была налита). Используется для расчёта воды.
+    public function scopePoured(Builder $query): Builder
+    {
+        return $query->where('result', 1)->where('status', '!=', 4);
+    }
+
+    // Финансовая продажа: успешная транзакция без возврата. reverse_id != 0 стоит у
+    // обеих записей возвратной пары, поэтому одно условие отсекает и оригинал, и возврат.
+    public function scopePaid(Builder $query): Builder
     {
         return $query->where('result', 1)->where('reverse_id', 0);
     }

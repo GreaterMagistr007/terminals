@@ -41,7 +41,7 @@ class VendistaTerminalController extends Controller
 
         if ($terminalDates->isEmpty()) {
             // Нет визитов — для всех считаем все транзакции
-            $allCounts = VendistaTransaction::successful()
+            $allCounts = VendistaTransaction::poured()
                 ->select('term_id', DB::raw('COUNT(*) as cnt'))
                 ->groupBy('term_id')
                 ->pluck('cnt', 'term_id');
@@ -55,7 +55,7 @@ class VendistaTerminalController extends Controller
 
         // Один запрос: все транзакции для нужных терминалов после самой ранней даты визита
         $earliestVisit = $terminalDates->min();
-        $transactions = VendistaTransaction::successful()
+        $transactions = VendistaTransaction::poured()
             ->after($earliestVisit)
             ->select('term_id', 'time')
             ->get();
@@ -77,7 +77,7 @@ class VendistaTerminalController extends Controller
 
         $noVisitCounts = [];
         if (! empty($noVisitTermIds)) {
-            $noVisitCounts = VendistaTransaction::successful()
+            $noVisitCounts = VendistaTransaction::poured()
                 ->whereIn('term_id', $noVisitTermIds)
                 ->select('term_id', DB::raw('COUNT(*) as cnt'))
                 ->groupBy('term_id')
@@ -108,7 +108,7 @@ class VendistaTerminalController extends Controller
 
         // Подсчёт продаж с последнего визита
         $lastVisitedAt = $terminal->service_visits_max_visited_at;
-        $query = VendistaTransaction::successful()->forTerminal($terminal->vendista_id);
+        $query = VendistaTransaction::poured()->forTerminal($terminal->vendista_id);
 
         if ($lastVisitedAt) {
             $query->after($lastVisitedAt);

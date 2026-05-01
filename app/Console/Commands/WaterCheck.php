@@ -100,7 +100,7 @@ class WaterCheck extends Command
 
         // Продажи после последнего визита
         $lastVisitedAt = $terminal->service_visits_max_visited_at;
-        $query = VendistaTransaction::successful()->forTerminal($terminal->vendista_id);
+        $query = VendistaTransaction::poured()->forTerminal($terminal->vendista_id);
 
         if ($lastVisitedAt) {
             $query->after($lastVisitedAt);

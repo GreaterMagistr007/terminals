@@ -26,7 +26,7 @@ class SalesController extends Controller
         $todayStart = Carbon::now()->startOfDay();
 
         // Агрегация успешных транзакций за сегодня по терминалам
-        $salesData = VendistaTransaction::successful()
+        $salesData = VendistaTransaction::paid()
             ->since($todayStart)
             ->select(
                 'term_id',
