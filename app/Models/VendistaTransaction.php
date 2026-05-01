@@ -45,10 +45,11 @@ class VendistaTransaction extends Model
         return $this->belongsTo(VendistaTerminal::class, 'term_id', 'vendista_id');
     }
 
-    // Единое определение «стакан = успешная транзакция». Меняется тут — везде.
+    // Единое определение «стакан = успешная продажа без возврата».
+    // reverse_id != 0 у обеих записей пары (оригинал и возвратная) — фильтр отсекает обе.
     public function scopeSuccessful(Builder $query): Builder
     {
-        return $query->where('result', 1);
+        return $query->where('result', 1)->where('reverse_id', 0);
     }
 
     public function scopeForTerminal(Builder $query, int $vendistaId): Builder
