@@ -12,10 +12,13 @@ use Illuminate\Support\Facades\Log;
 class WaterCheck extends Command
 {
     protected $signature = 'water:check';
+
     protected $description = 'Проверка уровня воды в аппаратах и уведомление в Telegram-группу';
 
     private const BOTTLE_VOLUME_ML = 18900;
+
     private const WATER_PER_CUP_ML = 340;
+
     private const LOW_WATER_THRESHOLD = 0.3;
 
     public function handle(VendistaService $vendistaService, TelegramService $telegramService): int
@@ -48,6 +51,7 @@ class WaterCheck extends Command
 
         if (empty($lowWaterTerminals)) {
             $this->info('Все аппараты в норме.');
+
             return self::SUCCESS;
         }
 
@@ -55,6 +59,7 @@ class WaterCheck extends Command
         $groupChatId = config('services.telegram.group_chat_id');
         if (empty($groupChatId)) {
             $this->warn('TELEGRAM_GROUP_CHAT_ID не задан, уведомление не отправлено.');
+
             return self::SUCCESS;
         }
 
@@ -95,11 +100,10 @@ class WaterCheck extends Command
 
         // Продажи после последнего визита
         $lastVisitedAt = $terminal->service_visits_max_visited_at;
-        $query = VendistaTransaction::where('term_id', $terminal->vendista_id)
-            ->where('result', 1);
+        $query = VendistaTransaction::successful()->forTerminal($terminal->vendista_id);
 
         if ($lastVisitedAt) {
-            $query->where('time', '>', $lastVisitedAt);
+            $query->after($lastVisitedAt);
         }
 
         $salesCount = $query->count();
@@ -110,6 +114,7 @@ class WaterCheck extends Command
             $remMain = max(0, $mainMl - $perBottleMl);
             $remSpare = max(0, $spareMl - $perBottleMl);
             $critical = min($remMain, $remSpare);
+
             return round(min(1, $critical / self::BOTTLE_VOLUME_ML), 1);
         }
 
