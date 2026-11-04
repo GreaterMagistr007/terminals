@@ -1,215 +1,84 @@
+---
+name: OFFLINE_PWA
+description: Offline-очередь визитов (IndexedDB, идемпотентность по client_uuid, retry), Service Worker, автообновление PWA и устойчивость auth к reload; читать при правках Service.vue, offlineQueue, sw.template.js, bootstrap.js.
+type: project
+---
 # Offline-очередь визитов и Service Worker
 
-Операторы работают в торговых точках с плохим мобильным интернетом. Приложение должно быть устойчиво к «висящим» запросам и полному отсутствию сети, а после деплоя — гарантированно подхватывать новый бандл без действий оператора.
+Операторы работают с плохим интернетом: приложение устойчиво к зависшим запросам и отсутствию сети, а новый бандл подхватывается без действий оператора.
 
-## Offline-очередь визитов
+## Ограничения (нарушение ломает механику)
 
-### Сохранение нового визита
+- Визит сначала в IndexedDB, потом сеть (`Service.vue::saveVisit`: `enqueue` предшествует `syncAll`). Иначе обрыв связи теряет визит.
+- Идемпотентность по `client_uuid` держится на трёх слоях: `id` записи IndexedDB = `client_uuid` (`offlineDb.js::savePendingVisit`, `offlineQueue.js::buildFormData`); ранний возврат существующего визита и `UniqueConstraintViolationException` в `ServiceVisitController::store`; unique-индекс миграции `2026_05_01_000000_add_client_uuid_to_service_visits`. Сломать любой слой — дубль `ServiceVisit` и повторное уведомление при потере 201-ответа.
+- `client_uuid` nullable; `ServiceVisitController::update` его не использует: редактирование визита идемпотентностью не защищено.
+- После `MAX_SYNC_ATTEMPTS` (`offlineQueue.js`) `syncAll` пропускает визит; без `retryAll()` (`resetAllSyncAttempts` + `syncAll`) он не уйдёт никогда.
+- Сетевая ошибка без `response` прерывает `syncAll` и не логируется; серверная — помечает визит и идёт дальше (`offlineQueue.js::syncAll`).
+- 419 — запрос `csrf-cookie` и одна повторная попытка (`offlineQueue.js::syncAll`).
+- Имена кеша SW содержат `BUILD_ID`, `activate` чистит чужие кеши; `/api` не-GET — только сеть, offline даёт 503 JSON; `/build/*` — Cache First; `manifest.json` — только Network First (иначе закешируется манифест со ссылками на удалённые чанки) (`sw.template.js`).
+- Без `reload` после `controllerchange` страница остаётся на старом коде из памяти (`bootstrap.js`, обработчик `controllerchange`). В `/service/*` reload откладывается до `router.afterEach`; без сети ждёт `online`.
+- Auth: сбой сети в `auth.js::fetchUser` — восстановление из `localStorage` (`auth-user-cache`), на `/login` не выкидывать.
+- Редактирование визита offline не поддерживается: синхронный POST с `_method=PUT`, без сети тост об ошибке (`Service.vue::saveVisit`).
 
-`resources/js/pages/Service.vue::saveVisit()`:
+## Offline-очередь
 
-```
-buildVisitData() → offlineQueueStore.enqueue() → deleteDraft() → router.push('/')
-                                               └→ в фоне: offlineQueueStore.syncAll()
-```
+`Service.vue::saveVisit` (новый визит): `enqueue` → удаление черновика → `router.push('/')`; при сети фоновый `syncAll()` без `await`. Без сети визит остаётся в очереди, `Home.vue` показывает баннер «Ожидает отправки».
 
-1. Визит всегда попадает в IndexedDB **сначала**.
-2. После этого — `router.push('/')`: UI возвращается на главную мгновенно.
-3. Если есть сеть — фоновый `syncAll()` без `await`.
-4. Если сети нет — визит остаётся в очереди, в Home показывается баннер «Ожидает отправки».
+Компоненты (методы — `grep -n '^export' resources/js/services/offlineDb.js`, `grep -n "async " resources/js/stores/offlineQueue.js`):
 
-### Редактирование визита
+- `resources/js/services/offlineDb.js` — IndexedDB `terminals-offline`, store `pendingVisits`, черновики.
+- `resources/js/stores/offlineQueue.js` (Pinia) — очередь, `syncAll`, `retryAll`, `lastSyncError`.
+- `resources/js/layouts/AppLayout.vue` — `backgroundFetch` раз в минуту, слушатель `online` → `syncAll`, слушатель `app:toast`.
+- `resources/js/pages/Home.vue` — кликабельный баннер: `retryAll()` и тост; при ошибке подпись с `lastSyncError.message`.
 
-Синхронный POST с `_method=PUT`. Offline-очередь не поддерживает редактирование. При отсутствии сети — тост «Редактирование недоступно без интернета».
+Ловушка: `Service.vue` имеет свой `showToast(type, message)` с обратным порядком аргументов относительно `AppLayout.vue::showToast(message, type)`.
 
-### Компоненты очереди
+### Идемпотентность
 
-| Файл | Ответственность |
-|------|-----------------|
-| `resources/js/services/offlineDb.js` | IndexedDB: `savePendingVisit`, `getPendingVisits`, `deletePendingVisit`, `updateSyncStatus`, **`resetAllSyncAttempts`**, `saveDraft`/`getDraft`/`deleteDraft`/`getAllDrafts`. |
-| `resources/js/stores/offlineQueue.js` (Pinia) | `enqueue`, `syncAll`, **`retryAll`**, `loadCount`, `pendingCount`, `syncing`, **`lastSyncError`**. |
-| `resources/js/layouts/AppLayout.vue` | `backgroundFetch` раз в минуту + listener `online` → `syncAll`. `showToast(message, type='success'\|'error')` + слушатель события `'app:toast'` через document. |
-| `resources/js/pages/Home.vue` | Кликабельный баннер: `pendingCount > 0` → `retryAll()` + тост «переотправляются». При ошибке — красный тост и подпись с `lastSyncError.message`. |
+`ServiceVisitController::store`: существующий `client_uuid` — возврат визита (200) без создания, фото, ротации и уведомлений (ранний return до `savePhoto`); иначе создание в `DB::transaction`, при гонке — ловля `UniqueConstraintViolationException` и возврат созданного. Клиент удаляет запись из IndexedDB как при обычном успехе. Поле `client_uuid` — `CHAR(36) NULLABLE UNIQUE`.
 
-### Идемпотентность отправки
+### Логирование ошибок sync
 
-Сервер может успешно создать визит, но 201-ответ потеряться в дороге (плохая сеть, мобильный браузер ушёл в background, таймаут прокси). Без защиты следующий тик `syncAll` отправит тот же визит ещё раз → второй `ServiceVisit` в БД, второе уведомление в Telegram.
-
-Защита — idempotency-ключ. У каждой записи в IndexedDB есть `id: crypto.randomUUID()` (`offlineDb.js`). `buildFormData` кладёт его в `client_uuid` поле. Бэк (`ServiceVisitController::store`):
-
-1. Если в БД уже есть `service_visit` с этим `client_uuid` — возвращает существующий (`200`), без создания, без фото, без ротации, без Telegram. Клиент удаляет запись из IndexedDB как при обычном успехе.
-2. Иначе создаёт визит с этим `client_uuid` внутри `DB::transaction`. Если параллельный ретрай выиграл гонку — `INSERT` падает на unique-индексе `service_visits.client_uuid`, ловим `UniqueConstraintViolationException`, возвращаем уже созданный визит.
-
-Поле `client_uuid` (`CHAR(36) NULLABLE UNIQUE`, миграция `2026_05_01_000000_add_client_uuid_to_service_visits`) — nullable: сторонние клиенты без UUID получают старое поведение, но без идемпотентности. Редактирование (PUT) не передаёт `client_uuid` и идёт мимо этого механизма.
-
-### Manual retry
-
-`MAX_SYNC_ATTEMPTS = 5`: после 5 неудачных попыток визит молча пропускается в `syncAll`. Оператор кликает по баннеру → `retryAll()` = `resetAllSyncAttempts()` (всем pending записям обнуляется `syncAttempts`) + `syncAll()`.
-
-Это решает проблему «застрявшего» визита, который из-за серверных ошибок (422 / 500) накопил 5 попыток и больше никогда не отправится автоматически.
-
-### Логирование ошибок sync на сервер
-
-При любой серверной ошибке в `syncAll` (есть `error.response`) store шлёт `apiClient.post('/client-errors', ...)` fire-and-forget с:
-
-- `source: 'offline-sync'` (или `'sync-retry-419'` если упала повторная попытка после CSRF refresh)
-- `message`: читаемое описание (`[status] message` или валидационная ошибка)
-- `context`: `visit_id`, `terminal_id`, `terminal_name`, `sync_attempts`, `status`, `response_data` (обрезанное до 2000 символов), `error_name`, `error_code`, `error_message`
-- `url`: текущий URL
-
-См. `CLIENT_ERROR_LOGGING.md`. Сетевые ошибки без `response` не логируются — серверу-то всё равно не дойдут.
-
-### Критерий успеха
-
-- «Сохранить» → мгновенный переход на главную (< 100 мс) независимо от сети.
-- Потеря связи в момент сохранения не приводит к потере визита.
-- Повторный вход в приложение не дублирует визиты.
-- Застрявший визит можно переотправить кликом по баннеру.
-- Причина залипания доступна админу в `/admin/client-errors` без физического доступа к телефону.
+Серверная ошибка в `syncAll` — fire-and-forget `apiClient.post('/client-errors')` (`offlineQueue.js`, `safeTrim` режет `response_data` до 2000 символов). `source`: `offline-sync` или `sync-retry-419` (повтор после CSRF refresh). Поля `context` — в `offlineQueue.js`; формат и фильтр — `CLIENT_ERROR_LOGGING.md`.
 
 ## Service Worker
 
-### Источник и сборка
+`resources/sw.template.js` → (`scripts/stamp-sw.cjs`, подставляет `BUILD_ID = Date.now()` при `npm run build` и `npm run dev`) → `public/sw.js` (в `.gitignore`). Кеши: `terminals-<BUILD_ID>`, `terminals-api-<BUILD_ID>`.
 
-```
-resources/sw.template.js   ──(scripts/stamp-sw.cjs)──▶   public/sw.js  (в .gitignore)
-```
+| Путь | Стратегия |
+|------|-----------|
+| `/api/*` GET | Network First → cache |
+| `/api/*` не-GET | Network only, offline → 503 JSON |
+| `navigate` | Network First → `/` из кеша |
+| `/build/manifest.json`, `/build/.vite/manifest.json` | Network First |
+| `/build/*` | Cache First (имена хэшированные) |
+| остальное | Network First → cache |
 
-`stamp-sw.cjs` подставляет `BUILD_ID = Date.now()` при `npm run build` и `npm run dev`.
-
-### Именование кеша
-
-```js
-const BUILD_ID = '__BUILD_ID__';
-const CACHE_NAME = 'terminals-' + BUILD_ID;
-const API_CACHE_NAME = 'terminals-api-' + BUILD_ID;
-```
-
-При каждой сборке имена кешей меняются. `activate` удаляет всё, что не входит в текущий список.
-
-### Стратегии
-
-| Путь | Стратегия | Почему |
-|------|-----------|--------|
-| `/api/*` GET | Network First → cache | Свежее лучше, кеш как fallback. |
-| `/api/*` не-GET | Network only | Мутации не кешируем, при offline → 503 JSON. |
-| `request.mode === 'navigate'` | Network First → `/` из кеша | SPA-оболочка. |
-| `/build/manifest.json`, `/build/.vite/manifest.json` | Network First | Cache First запирает старый манифест со ссылками на удалённые чанки. |
-| `/build/*` | Cache First | Имена хэшированные — cache-busting встроен. |
-| Остальное | Network First → cache | Фото, `/manifest.json` и т.п. |
+Источник — `sw.template.js` (обработчик `fetch`).
 
 ## PWA auto-update
 
-### Зачем нужна отдельная стратегия
+`resources/js/bootstrap.js`: `tryUpdate(registration)` вызывает `registration.update()`, кроме ночи. Ночь — 23:00–07:00 по Asia/Irkutsk (`isNightTime`, `OPERATORS_TZ`), экономия батареи. Триггеры: `setInterval` раз в час (`SW_UPDATE_INTERVAL_MS`), `visibilitychange` → visible, `online`.
 
-SW обновляет сетевые ассеты, но **не может перезагрузить уже выполняющуюся страницу**. JS-модули в памяти Vue-приложения остаются старыми после `controllerchange`. Без явного `location.reload()` оператор продолжает работать на старом коде.
+`controllerchange`: на `/service/*` — флаг `pendingReload` и тост (CustomEvent `app:toast`); иначе `safeReload()` (reload только при `navigator.onLine`, иначе ждёт `online`). `applyPendingReloadIfSafe` (`bootstrap.js`) вызывается из `router.afterEach` (`resources/js/router/index.js`): при поднятом `pendingReload` и пути не `/service/*` — `safeReload()`.
 
-Пример: баг с непрерывным голосовым вводом в форме обслуживания возвращался у тех, кто открыл PWA до деплоя — SW обновлялся, но активная страница продолжала использовать старый `Service.vue` из памяти.
+Lazy-чанк не загрузился (`router.onError`, `router/index.js`): на `home` — reload, иначе `router.push('home')`.
 
-### Слои защиты
+| Сценарий | Когда применится обновление |
+|----------|------------------------------|
+| PWA развёрнута / появилась сеть | сразу (`visibilitychange` / `online`) |
+| PWA постоянно на экране | не позже часа |
+| `controllerchange` вне `/service/*` | сразу |
+| `controllerchange` в `/service/*` | при выходе из формы |
+| ночь 23:00–07:00 Иркутск | проверки пропускаются до 07:00 |
 
-`resources/js/bootstrap.js`:
+## Auth-store
 
-```js
-const SW_UPDATE_INTERVAL_MS = 60 * 60 * 1000;  // 1 час
-const NIGHT_START_HOUR = 23;                    // 23:00 Asia/Irkutsk
-const NIGHT_END_HOUR = 7;                       // до 07:00
-
-function tryUpdate(registration) {
-    if (isNightTime()) return;  // ночные деплои не делаются
-    registration.update().catch(() => {});
-}
-```
-
-Триггеры проверки обновлений (все идут через `tryUpdate`, ночью пропускаются):
-
-| Триггер | Когда срабатывает |
-|---------|-------------------|
-| `setInterval(tryUpdate, 60min)` | главное — гарантия для постоянно открытых PWA |
-| `visibilitychange` → `visible` | при возврате фокуса на вкладку |
-| `online` | при появлении сети после офлайна |
-
-### controllerchange + safeReload
-
-```js
-navigator.serviceWorker.addEventListener('controllerchange', () => {
-    const onServiceForm = window.location.pathname.startsWith('/service/');
-
-    if (onServiceForm) {
-        pendingReload = true;
-        showToast('Доступно обновление. Применится после завершения визита.', 'success');
-        return;
-    }
-
-    safeReload();  // location.reload, но только при navigator.onLine
-});
-```
-
-`safeReload()` — обёртка над `location.reload()`:
-- Если `navigator.onLine === false` → ставит `pendingReload = true` и слушатель `'online'`.
-- Иначе → `location.reload()`.
-
-Это страховка от ситуации, когда SW активирован в момент сетевого сбоя — лучше дождаться сети.
-
-### Отложенный reload в форме обслуживания
-
-`resources/js/router/index.js`:
-
-```js
-import { applyPendingReloadIfSafe } from '@/bootstrap';
-
-router.afterEach((to) => {
-    applyPendingReloadIfSafe(to.fullPath);
-});
-```
-
-`applyPendingReloadIfSafe(path)`:
-- Если `pendingReload` поднят и `path` НЕ `/service/*` → `safeReload()`.
-
-То есть оператор, которого `controllerchange` поймал в форме обслуживания:
-1. Видит синий тост «Доступно обновление...».
-2. Спокойно дозаполняет визит.
-3. После сохранения попадает на главную → срабатывает `router.afterEach` → reload подхватывает свежий бандл.
-
-### Полная таблица сценариев
-
-| Сценарий оператора | Когда применится обновление |
-|---------------------|------------------------------|
-| PWA свёрнута, потом развёрнута | моментально (visibilitychange) |
-| PWA постоянно на экране | максимум через 1 час (interval) |
-| Был офлайн, появилась сеть | моментально (online) |
-| controllerchange на главной/админке | моментально (auto-reload) |
-| controllerchange в форме `/service/*` | при первом выходе из формы (router.afterEach) |
-| Lazy-чанк не загрузился (старый манифест в памяти) | моментально (router.onError → reload) |
-| Любой триггер ночью (23:00–07:00 Иркутск) | пропускается до 07:00 |
-
-## Auth-store — устойчивость к reload
-
-`resources/js/stores/auth.js`:
-
-```js
-async fetchUser() {
-    try {
-        const { data } = await apiClient.get('/auth/me');
-        this.user = data.user;
-        this._saveToStorage();
-    } catch {
-        if (!this.user) {
-            this._loadFromStorage();  // restore from localStorage
-        }
-    } finally {
-        this.loaded = true;
-    }
-}
-```
-
-При reload в плохой сети `fetchUser` падает на сетевой ошибке → пользователь восстанавливается из `localStorage` `auth-user-cache`. `isAuthenticated` остаётся `true`, на `/login` не выкидывает.
-
-См. также `DEPLOY.md` раздел «Сессии и не-разлогинивание»: `SESSION_LIFETIME=2628000` (5 лет idle).
+`resources/js/stores/auth.js::fetchUser`: при ошибке и пустом `user` — `_loadFromStorage()`, ключ `USER_CACHE_KEY = 'auth-user-cache'`. Сессия: `SESSION_LIFETIME` в `.env.example` (см. `DEPLOY.md`, «Сессии и не-разлогинивание»).
 
 ## Если снова сломается
 
-- DevTools (через `chrome://inspect/#devices` для PWA на Android) → Application → Service Workers: смотреть `/sw.js`, `Status`, нажать `Update`.
-- Application → Cache Storage: должны быть только `terminals-<BUILD_ID>` и `terminals-api-<BUILD_ID>` с одним и тем же свежим `BUILD_ID`. Всё остальное — зомби-кеши, удалить.
-- Application → IndexedDB → `terminals-offline` → `pendingVisits`: смотреть записи с `syncStatus: 'failed'` и `syncError`.
-- В админке `/admin/client-errors` — фильтр по `source = 'offline-sync'`, последние ошибки с context (response_data сервера и т.п.).
+- DevTools (`chrome://inspect/#devices` для PWA на Android) → Application → Service Workers: `/sw.js`, `Status`, `Update`.
+- Cache Storage: только `terminals-<BUILD_ID>` и `terminals-api-<BUILD_ID>` с одним свежим `BUILD_ID`; остальное удалить.
+- IndexedDB → `terminals-offline` → `pendingVisits`: записи с `syncStatus` и ошибкой (`offlineDb.js::updateSyncStatus`, поле ошибки `syncError`).
+- Админка `/admin/client-errors`, фильтр `source = 'offline-sync'`.

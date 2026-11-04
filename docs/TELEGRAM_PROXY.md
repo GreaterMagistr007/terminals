@@ -1,193 +1,47 @@
+---
+name: TELEGRAM_PROXY
+description: Как исходящие запросы к Telegram Bot API идут через SOCKS5-прокси и какие инварианты нельзя нарушать (socks5h, multipart для фото, один getUpdates); читать при правках TelegramService и разборе ошибок отправки.
+type: project
+---
 # Telegram через SOCKS5-прокси
 
 ## Зачем
 
-Сервер проекта расположен в РФ. С территории РФ домен `api.telegram.org` заблокирован
-(`Could not resolve host` / timeout), поэтому прямые запросы из Laravel к Telegram Bot API
-не проходят. Решение — пустить трафик через SOCKS5-прокси на зарубежном сервере.
-
-Используется Shadowsocks (Outline), сервер на NL: `103.137.248.69:27503`. Та же инфраструктура,
-что и в соседнем проекте **constructor** (saitora.ru) — это эталонная реализация.
-
-## Архитектура
+С серверов в РФ `api.telegram.org` недоступен (`Could not resolve host` / таймаут). Исходящий трафик к Telegram идёт через SOCKS5-прокси на зарубежном сервере (Shadowsocks). Развёртывание прокси — в [TELEGRAM_PROXY_SETUP.md](./TELEGRAM_PROXY_SETUP.md).
 
 ```
-Laravel (RU)  ──HTTP──►  ss-local (127.0.0.1:1080)  ──Shadowsocks──►  Outline NL  ──HTTPS──►  api.telegram.org
+Laravel (RU)  ──HTTP──►  ss-local (127.0.0.1:1080)  ──Shadowsocks──►  зарубежный сервер  ──HTTPS──►  api.telegram.org
 ```
 
-- `ss-local` — клиент Shadowsocks, слушает SOCKS5 на `127.0.0.1:1080`.
-- Laravel ходит на `socks5h://127.0.0.1:1080` (схема `socks5h` — DNS резолвится на стороне прокси,
-  обязательно для заблокированного домена).
-- Прокси применяется **точечно** только к Telegram-клиенту. Остальные HTTP-вызовы
-  (Vendista, Яндекс.Карты и т.п.) идут напрямую.
+## Как подключено в коде
 
-## Реализация в Laravel
+- Конфиг: `config/services.php`, ключ `services.telegram.proxy`, переменная `TELEGRAM_PROXY`; значение для dev и прода — в `.env.example`.
+- Клиент: `TelegramService::http` — единая точка всех HTTP-вызовов `TelegramService`; добавляет `withOptions(['proxy' => ...])`, если значение задано. `http(true)` — multipart-вариант.
+- После смены `TELEGRAM_PROXY` в `.env` выполнить `php artisan config:cache`: конфиг читается из кэша.
 
-### Конфиг — `config/services.php`
+## Инварианты
 
-```php
-'telegram' => [
-    'bot_token' => env('TELEGRAM_BOT_TOKEN'),
-    // ...
-    'proxy' => env('TELEGRAM_PROXY'),
-],
-```
-
-### Клиент — `app/Services/TelegramService.php`
-
-Все HTTP-вызовы (`sendMessage`, `sendPhoto`, `sendMediaGroup`, `getUpdates`) идут через
-приватный `http()`, который добавляет `withOptions(['proxy' => ...])` если `TELEGRAM_PROXY`
-задан. Если пусто — поведение не меняется (прямой запрос).
-
-```php
-private function http(): PendingRequest
-{
-    $client = Http::asJson();
-    if ($this->proxy !== null) {
-        $client = $client->withOptions(['proxy' => $this->proxy]);
-    }
-    return $client;
-}
-```
-
-### `.env`
-
-```
-TELEGRAM_PROXY=socks5h://127.0.0.1:1080
-```
-
-На dev — оставить пустым, запросы пойдут напрямую (локально Telegram не блокируется).
-
-## Настройка сервера (native, без docker)
-
-### 1. Получить Outline Access Key
-
-Ключ выдаётся в Outline Manager. Формат: `ss://BASE64==@103.137.248.69:27503/?outline=1`.
-
-Декодировать base64 из части до `@` — получится `method:password`
-(например, `chacha20-ietf-poly1305:SECRET_PASS`).
-
-### 2. Установить shadowsocks-libev
-
-```bash
-sudo apt update
-sudo apt install -y shadowsocks-libev
-```
-
-### 3. Конфиг `/etc/shadowsocks-libev/config.json`
-
-```json
-{
-    "server": "103.137.248.69",
-    "server_port": 27503,
-    "local_address": "127.0.0.1",
-    "local_port": 1080,
-    "password": "<PASSWORD_FROM_ACCESS_KEY>",
-    "timeout": 300,
-    "method": "<METHOD_FROM_ACCESS_KEY>"
-}
-```
-
-**Не коммитить** конфиг с паролем в git — он хранится только на сервере.
-
-### 4. Запустить systemd-юнит
-
-```bash
-sudo systemctl enable --now shadowsocks-libev-local@config
-sudo systemctl status shadowsocks-libev-local@config
-```
-
-(имя юнита может быть `ss-local@config` в зависимости от дистрибутива)
-
-### 5. Проверка прокси
-
-```bash
-curl -s -o /dev/null -w "HTTP %{http_code} in %{time_total}s\n" \
-  --max-time 10 --proxy socks5h://127.0.0.1:1080 https://api.telegram.org
-```
-
-Ожидание: `HTTP 302 in ~0.2–0.5s`. Таймаут — сервер недоступен или неверный пароль/метод.
-
-### 6. Проверка из Laravel
-
-```bash
-php artisan tinker --execute='app(App\Services\TelegramService::class)->sendMessage(config("services.telegram.admin_telegram_id"), "test");'
-```
-
-Сообщение должно прийти, в логах не должно быть `Telegram sendMessage failed`.
+- Схема только `socks5h://`. При `socks5://` DNS резолвится локально, `api.telegram.org` не находится. Код передаёт строку как есть, проверки схемы нет.
+- Пустое значение `TELEGRAM_PROXY` — прямой запрос (`TelegramService::__construct`). На проде без прокси запросы не пройдут; на dev пусто допустимо.
+- Прокси применяется только в `TelegramService::http`. Остальные HTTP-вызовы (Vendista и др.) идут напрямую; общий прокси для них заводить нельзя.
+- Фото передаются только локальным путём файла и multipart (`attach://`), не URL: `TelegramService::sendPhoto` (ветка `isLocalFile`) и `TelegramService::sendMediaGroup` (`attach://fileN`, поле `media` — `json_encode`-строка). Путь берётся как `Storage::disk('public')->path(...)`, см. `ServiceVisitController::getPhotoPaths`. Причина: по URL Telegram сам скачивает файл с нашего сервера и нестабильно его достаёт — ошибка `400 ... WEBPAGE_CURL_FAILED`; прокси этому не помогает, он только на исходящий трафик. URL-ветка в `sendPhoto`/`sendMediaGroup` остаётся как запасная, не удалять.
+- Ветка URL определяется по `str_starts_with($photo, 'http')`: локальный путь, начинающийся с `http`, уйдёт как URL.
+- Один потребитель `getUpdates` (`telegram:poll`). Второй (в том числе `telegram:chat-id` при запущенном `telegram:poll`) даёт 409 Conflict; код его не обрабатывает.
+- `getUpdates` запрашивает `allowed_updates=['message']`: `callback_query`, `my_chat_member` и другие типы боту не приходят. `offset` хранится в памяти процесса `telegram:poll`, после рестарта начинается с 0.
+- Лимит Telegram — 10 фото в `sendMediaGroup`; код его не проверяет.
+- Повторов и обработки 429/`retry_after` нет; любой не-2xx — `Log::error` и `false`/`[]`.
 
 ## Типовые ошибки
 
 | Симптом | Причина | Решение |
 |---|---|---|
-| `Connection refused` | ss-local не запущен | `systemctl status shadowsocks-libev-local@config` |
-| `Could not resolve host api.telegram.org` | Схема `socks5://` вместо `socks5h://` | Поменять в `TELEGRAM_PROXY` |
-| Таймаут через прокси | Неверный password/method в config.json | Перепроверить Outline Access Key |
-| Работает из curl, не из Laravel | Не перезапущены воркеры очереди | `php artisan queue:restart`, reload php-fpm |
-| Telegram возвращает `Unauthorized` | Токен бота недействителен | Проверить `TELEGRAM_BOT_TOKEN`, `curl .../getMe` |
-| `chat not found` | Бот не в чате / неверный `chat_id` (у супергруппы префикс `-100`) | Проверить `TELEGRAM_GROUP_CHAT_ID` |
+| `Connection refused` | `ss-local` не запущен | `systemctl status shadowsocks-libev-local@config` |
+| `Could not resolve host api.telegram.org` | схема `socks5://` вместо `socks5h://` | поменять `TELEGRAM_PROXY` |
+| Таймаут через прокси | неверный password/method в конфиге ss-local | перепроверить Outline Access Key |
+| Работает из curl, не из Laravel | конфиг в кэше | `php artisan config:cache`; перезапустить `telegram:poll` (долгоживущий процесс, см. [operations.md](./operations.md)); фоновых воркеров очереди нет, FPM подхватывает `.php` по mtime ([DEPLOY.md](./DEPLOY.md)) |
+| `Unauthorized` | токен бота недействителен | проверить `TELEGRAM_BOT_TOKEN`, `curl .../getMe` |
+| `chat not found` | бот не в чате / неверный `chat_id` (у супергруппы префикс `-100`) | проверить `TELEGRAM_GROUP_CHAT_ID` |
+| `400 ... WEBPAGE_CURL_FAILED` | фото ушло URL-ом, а не файлом | передавать локальный путь (см. инварианты) |
+| `409 Conflict` на `getUpdates` | запущен второй потребитель | оставить один `telegram:poll` |
 
-## Отправка фото: только multipart, не URL
-
-### Проблема
-
-При отправке фото визитов через `sendPhoto` / `sendMediaGroup` **по URL**
-(когда в `media[i]['media']` лежит публичная ссылка вида
-`https://termials.in-site.ru/storage/...`) Telegram-серверы **сами скачивают**
-файл с нашего сайта. Сервер в РФ, и встречный HTTP от Telegram-CDN к нам
-нестабилен — периодически приходит ошибка:
-
-```
-Telegram sendMediaGroup failed
-status: 400
-body: {"ok":false,"error_code":400,"description":"Bad Request: failed to send message #1 with the error message \"WEBPAGE_CURL_FAILED\""}
-```
-
-SOCKS5-прокси решает только исходящий трафик (мы → Telegram), а встречные
-запросы от Telegram к нам через него не идут.
-
-### Решение — multipart через `attach://`
-
-Файлы льём мы сами, бинарно, через тот же SOCKS5-прокси. Telegram ничего не
-скачивает с нашего сервера → класс ошибок `WEBPAGE_CURL_FAILED` исчезает.
-
-```php
-// TelegramService::sendPhoto — локальный путь → multipart
-$request = $this->http(true)->attach('photo', fopen($photo, 'r'), basename($photo));
-$response = $request->post("{$this->apiBaseUrl}/sendPhoto", $payload);
-
-// TelegramService::sendMediaGroup — attach://fileN + multipart
-foreach ($media as $index => &$item) {
-    if (!str_starts_with($item['media'], 'http') && is_file($item['media'])) {
-        $attachments[] = ['name' => "file{$index}", 'path' => $item['media']];
-        $item['media'] = "attach://file{$index}";
-    }
-}
-$request = $this->http(true);
-foreach ($attachments as $a) {
-    $request = $request->attach($a['name'], fopen($a['path'], 'r'), basename($a['path']));
-}
-$response = $request->post("{$this->apiBaseUrl}/sendMediaGroup", [
-    'chat_id' => $chatId,
-    'media' => json_encode($media),
-]);
-```
-
-`http(true)` возвращает `Http::asMultipart()` вместо `Http::asJson()`,
-прокси применяется так же, как для текстовых вызовов.
-
-### Правило для нового кода
-
-Фото в Telegram передаются **абсолютным путём к файлу на диске**
-(`Storage::disk('public')->path($photo->path)`), а не публичным URL.
-См. `ServiceVisitController::getPhotoPaths()`.
-
-URL-вариант в `sendPhoto` / `sendMediaGroup` оставлен как fallback — не удалять,
-но по умолчанию использовать только локальные пути.
-
-## Ссылки
-
-- Полная инструкция по развёртыванию прокси (общая для всех проектов Vigbo):
-  `/media/user/H_SSD_31/projects/constructor/docs/telegram-proxy-agent-instructions.md`
-- Эталонная реализация прокси: проект **constructor** (saitora.ru),
-  `app/Services/Notifications/TelegramNotifier.php`.
+Процедура настройки прокси-сервера и его проверки — [TELEGRAM_PROXY_SETUP.md](./TELEGRAM_PROXY_SETUP.md).

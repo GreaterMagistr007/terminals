@@ -1,108 +1,54 @@
+---
+name: CLIENT_ERROR_LOGGING
+description: Приём клиентских ошибок (POST /api/client-errors), значения source, админка /admin/client-errors и диагностика offline-sync; читать при добавлении источников ошибок или разборе сбоев очереди.
+type: project
+---
 # Логирование клиентских ошибок
 
-Цель: отлаживать проблемы оператора (особенно offline-sync визитов) **без физического доступа к телефону**. Фронт отправляет описание ошибки на сервер, админ видит её в `/admin/client-errors`.
+Фронт отправляет описание ошибки на сервер, админ видит её в `/admin/client-errors` — отладка без доступа к телефону оператора.
 
-## База
+## Ограничения
 
-Миграция `database/migrations/2026_04_29_000000_create_client_error_logs_table.php`:
+- `recordError` — fire-and-forget с `.catch(() => {})`: иначе ошибка самого лога зациклит отправку (`resources/js/stores/offlineQueue.js::recordError`).
+- Лимиты: `response_data` до 2000 символов (`offlineQueue.js::safeTrim`), `message` max:5000, `source` max:64 (`ClientErrorController::store`). Превышение даёт 422 на логе и потерю записи.
+- Сетевые ошибки без `response` не логируются (`offlineQueue.js::syncAll`): сервер недостижим, очередь запросов в офлайне разрастётся.
+- Писать могут только аутентифицированные пользователи; `user_id` nullable, `set null` при удалении (миграция).
+- `throttle:60,1` на `POST /client-errors` (`routes/api.php`): при burst-логировании нужна дедупликация на клиенте.
+- Новые источники — новая строка `source`, а не второй endpoint.
 
-| Поле | Тип | Назначение |
-|------|-----|-----------|
-| `id` | bigint PK | |
-| `user_id` | FK users (nullable, set null on delete) | кто словил ошибку |
-| `source` | varchar(64) | категория (`offline-sync`, `sync-retry-419`, …) |
-| `message` | text | читаемое описание |
-| `context` | json (nullable) | произвольные данные для разбора |
-| `url` | varchar(500) | URL клиента в момент ошибки |
-| `user_agent` | varchar(500) | UA из заголовка |
-| `ip` | varchar(45) | IP клиента |
-| `created_at` | timestamp | время |
+## База и backend
 
-Индексы: `created_at`, `source`.
-
-## Backend
-
-`app/Http/Controllers/ClientErrorController.php` — методы:
-
-| Метод | Маршрут | Middleware | Назначение |
-|-------|---------|-----------|-----------|
-| `store(Request)` | `POST /api/client-errors` | `auth:sanctum`, `active`, `throttle:60,1` | приём логов с фронта |
-| `index(Request)` | `GET /api/admin/client-errors` | + `admin` | список, фильтр по `source` / `user_id`, лимит до 500 |
-| `destroy(ClientErrorLog)` | `DELETE /api/admin/client-errors/{id}` | + `admin` | удаление одной записи |
-| `clear(Request)` | `DELETE /api/admin/client-errors/clear` | + `admin` | очистить всё или старее N дней |
-
-Валидация:
-- `source` — required string max:64
-- `message` — required string max:5000
-- `context` — nullable array
-- `url` — nullable string max:500
-
-Сервер сам подставляет `user_id`, `user_agent` (обрезается до 500), `ip`, `created_at`. Возвращает `204 No Content`.
-
-## Frontend (отправка)
-
-`resources/js/stores/offlineQueue.js::recordError()`:
-
-```js
-apiClient
-    .post('/client-errors', {
-        source,
-        message,        // [status] message или валидационная ошибка
-        context: {
-            visit_id, terminal_id, terminal_name,
-            sync_attempts, status,
-            response_data,  // обрезано до 2000 символов
-            error_name, error_code, error_message,
-        },
-        url: window.location.href,
-    })
-    .catch(() => {});  // fire-and-forget
-```
-
-Логируется только при ошибках с `error.response` (т.е. сервер ответил, но не 2xx). Сетевые ошибки без response не пишутся — серверу не дойдут всё равно.
+- Схема — миграция `database/migrations/2026_04_29_000000_create_client_error_logs_table.php` (индексы `created_at`, `source`).
+- Контроллер — `app/Http/Controllers/ClientErrorController.php` (`store`, `index`, `destroy`, `clear`); маршруты: `grep -n 'client-errors' routes/api.php`.
+- `store`: валидация `source` required max:64, `message` required max:5000, `context` nullable array, `url` nullable max:500; сервер сам ставит `user_id`, `user_agent` (до 500), `ip`, `created_at`; ответ `204`.
+- `index`: фильтры `source` / `user_id`, `limit` 1..500, по умолчанию 100. `clear`: параметр `older_than_days` (min:0), без него удаляет всё (UI вызывает без параметра).
 
 ## Источники (`source`)
 
+Значения — контракт: по ним фильтруется админка. Использования: `grep -rn "'offline-sync'\|'sync-retry-419'" resources/js`.
+
 | Источник | Когда возникает |
 |----------|----------------|
-| `offline-sync` | основная серверная ошибка в `syncAll()` (включая 419 если первая попытка не починилась) |
+| `offline-sync` | серверная ошибка в `syncAll()` |
 | `sync-retry-419` | повторная попытка после CSRF refresh тоже упала |
 
-Новые источники добавлять как уникальные строки — не создавать второй endpoint.
+При провале 419-retry создаются две записи: `sync-retry-419`, затем `offline-sync` (`offlineQueue.js::syncAll`).
 
 ## Админка
 
-`resources/js/pages/admin/ClientErrors.vue`, маршрут `/admin/client-errors`, пункт меню «Ошибки клиентов» в `AdminLayout.vue`.
+`resources/js/pages/admin/ClientErrors.vue`, маршрут `/admin/client-errors` (`resources/js/router/index.js`), пункт меню «Ошибки клиентов» в `resources/js/layouts/AdminLayout.vue`. Дата показывается в Asia/Irkutsk. Список, фильтр по `source`, раскрытие карточки (`user_agent`, `ip`, `context`), удаление одной записи и очистка.
 
-Возможности:
-- Список последних записей (по умолчанию 100, до 500).
-- Фильтр по `source` (выпадающий список с уникальными значениями).
-- На карточке: бейдж source, дата (Asia/Irkutsk), имя пользователя, message, url.
-- Раскрытие карточки — `user_agent`, `ip`, `context` (форматированный JSON).
-- Удаление одной записи (`DELETE /admin/client-errors/{id}`).
-- «Очистить все» (`DELETE /admin/client-errors/clear`).
+## Типичные кейсы offline-sync
 
-## Типичные кейсы для отладки offline-sync
-
-| Что в `context.status` / `response_data` | Диагноз |
-|------------------------------------------|---------|
-| 422, в `errors` поле `terminal_id`/`visited_at`/etc | Валидация: данные визита битые, проверить как формируется FormData |
-| 413 | Слишком большое фото — Apache/PHP лимит, сжатие на фронте не сработало |
+| `context.status` / `response_data` | Диагноз |
+|------------------------------------|---------|
+| 422, в `errors` поле `terminal_id`/`visited_at` и т.п. | Данные визита битые, проверить формирование FormData |
+| 413 | Слишком большое фото — лимит Apache/PHP; фронт сжимает фото до 1920 px по ширине (`Service.vue::compressImage`) |
 | 500, в `response_data` SQL/исключение | Серверная регрессия |
-| 419, CSRF retry тоже упал | Cookie `XSRF-TOKEN` не пробрасывается, проверить sanctum stateful domains |
-
-## Что НЕ логируется
-
-- Сетевые ошибки без `response` (нет смысла — сервер вне досягаемости).
-- 401 от auth — обработка отдельно в auth-store, не считается «ошибкой sync».
-- Ошибки самого `POST /client-errors` — `.catch(() => {})`, чтобы не зациклиться.
+| 419, CSRF retry тоже упал | Не пробрасывается cookie `XSRF-TOKEN`, проверить sanctum stateful domains |
 
 ## Расширение на другие места
 
-Если нужно добавить логирование из другого компонента (не offline-sync):
-
-1. Используй существующий `apiClient.post('/client-errors', ...)`.
-2. Уникальный `source` (например, `'photo-upload'`, `'auth-refresh'`).
-3. Складывай в `context` всё, что поможет понять причину: статус, ID связанных сущностей, обрезанный response.
-
-`throttle:60,1` (60 запросов в минуту с одного IP) рассчитан на нормальную нагрузку. Если в новой фиче возможен burst — стоит добавить локальную дедупликацию на стороне клиента, чтобы не упереться в лимит.
+1. Использовать `apiClient.post('/client-errors', ...)`.
+2. Уникальный `source` (например, `photo-upload`).
+3. В `context` — статус, ID связанных сущностей, обрезанный response.

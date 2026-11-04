@@ -1,77 +1,58 @@
+---
+name: VENDISTA_API
+description: Контракт интеграции с Vendista API, который использует код (токен, /transactions, /terminals, время Europe/Moscow, result/status/reverse_id, пагинация, таймауты, ретраи); читать при правках VendistaService и синхронизации транзакций.
+type: project
+---
 # Vendista API (Aplata.Server API)
 
-Документация: https://api.vendista.ru:99/swagger/index.html
-Спецификация: https://api.vendista.ru:99/swagger/ru/swagger.json (OpenAPI 3.0.4, ~1.1 МБ)
-Базовый URL: `https://api.vendista.ru:99`
+Базовый URL: `https://api.vendista.ru:99`, задаётся `VENDISTA_API_URL` (`config/services.php`, значения — в `.env.example`). Логин и пароль — `VENDISTA_API_LOGIN`, `VENDISTA_API_PASSWORD`. Весь клиент — `app/Services/VendistaService.php`. Остальной API (код его не вызывает) — в файле частностей, последняя строка.
 
 ## Авторизация
 
-### Получение токена
+- Токен: `GET /token?Login=..&Password=..` — `VendistaService::authenticate`. Токен берётся из поля `token` ответа.
+- Хранение: `Cache::put('vendista_api_token', ...)` без TTL (`authenticate`); срок жизни токена коду неизвестен.
+- Передача: query-параметром `token` в каждом запросе (`VendistaService::sendRequest`). Refresh-токена нет.
+- Признак истечения — только HTTP 401: `VendistaService::request` сбрасывает кэш, получает токен заново и повторяет запрос один раз. Повторный 401 — общий путь ошибки: `Log::error`, результат `null`.
+- 2FA не поддерживается: `verification_code_sended: true` в ответе `/token` — ошибка авторизации, `/token/verify` не вызывается.
+- Ошибка авторизации (не 2xx на `/token`, 2FA, нет токена) — `Log::error` и сообщение первому активному админу с `telegram_id` (`VendistaService::handleAuthError`).
+- Токен в query попадает в access-логи прокси и веб-серверов; код логирует только path и тело ответа, не URL.
 
-```
-GET /token?Login={login}&Password={password}
-```
+## Вызываемые эндпоинты
 
-Ответ:
-```json
-{
-  "verification_code_sended": false,
-  "token": "<token>",
-  "user_id": 123
-}
-```
-
-Если `verification_code_sended: true` — включена 2FA, токен будет `null`. Подтверждение:
-
-```
-GET /token/verify?Code={code}
-```
-
-### Использование токена
-
-Токен передаётся **query-параметром** во всех запросах:
-
-```
-GET /transactions?token=<token>&TermId=123&DateFrom=...
-```
-
-Refresh-токена нет. При истечении — повторный запрос `/token`.
-
----
-
-## Транзакции
-
-### GET /transactions — список транзакций за период
-
-| Параметр | Тип | Описание |
+| Эндпоинт | Метод кода | Параметры, которые шлёт код |
 |---|---|---|
-| `TermId` | int64 | ID терминала (если не указан — все терминалы) |
-| `OwnerId` | int32 | ID клиента |
-| `DivisionId` | int32 | ID подразделения |
-| `ProcessingIds` | array[int32] | Фильтр по процессингам |
-| `DateFrom` | date-time | Начало периода |
-| `DateTo` | date-time | Конец периода |
-| + пагинация, фильтрация, сортировка (см. раздел ниже) |
+| `GET /token` | `VendistaService::authenticate` | `Login`, `Password` |
+| `GET /transactions` | `VendistaService::getTransactions`, из синхронизации — `fetchAllTransactions` | `DateFrom`, `DateTo`, `PageNumber`, `ItemsOnPage` (100); `TermId` код при выборке не передаёт |
+| `GET /terminals` | `VendistaService::fetchAllTerminals` | `PageNumber`, `ItemsOnPage` (100) |
 
-Ответ:
+Обёртки `getSalesTotals`, `getSalesList`, `getCommonReport` и метод `post` в `VendistaService` есть, вызовов нет.
+
+Признак успешного тела ответа — поле `success`; ошибка: `{ "success": false, "error": "текст" }`. Суммы — в копейках.
+
+## Время
+
+Vendista принимает и отдаёт время в Europe/Moscow без смещения (`2026-03-19T10:30:00`). Код шлёт `DateFrom`/`DateTo` в Moscow и разбирает `time`, `reverse_time` ответа как Moscow с переводом в UTC (`VendistaService::mapTransactionRow`, окна — `syncTransactions`). Ошибка пояса сдвигает окно выборки и время транзакции на 3 часа. Все зоны проекта и места конвертации — в [TIMEZONES.md](./TIMEZONES.md).
+
+## GET /transactions
+
+Ответ (поля, которые читает код — `VendistaService::mapTransactionRow`):
 ```json
 {
   "page_number": 1,
-  "items_per_page": 50,
+  "items_per_page": 100,
   "items_count": 1234,
   "items": [
     {
       "id": 999999,
       "term_id": 123,
-      "terminal_id": "TID001",
       "sum": 5000,
       "time": "2026-03-19T10:30:00",
-      "result": 0,
+      "result": 1,
+      "status": 1,
+      "response_code": 0,
       "card_number": "****1234",
-      "processing": 1,
-      "machine_item": [
-        { "machine_item_id": 1, "quantity": 1, "item_info": "Кофе Американо" }
-      ]
+      "reverse_id": 0,
+      "reverse_time": null
     }
   ],
   "success": true,
@@ -79,7 +60,7 @@ Refresh-токена нет. При истечении — повторный з
 }
 ```
 
-Суммы в **копейках** (int32/int64).
+Отсутствующие поля код подставляет по умолчанию: `sum`, `result`, `status`, `response_code`, `reverse_id` — 0; `card_number`, `reverse_time` — `null`. Остальные поля ответа (`terminal_id`, `processing`, `machine_item` и др.) код не читает.
 
 ### Поля `result`, `status`, `reverse_id`, `reverse_time`
 
@@ -91,210 +72,24 @@ Refresh-токена нет. При истечении — повторный з
 | 2 | оригинал, по которому позже был возврат | > 0 | `trans_id` возвратной записи |
 | 4 | возвратная запись (отмена платежа) | < 0 (или 0) | `trans_id` оригинала |
 
-`status = 5` встречается у `result ∈ {0, -1}` — отмена на уровне процессинга, попадает в БД отдельной записью с отрицательной суммой.
+`status = 5` встречается у `result ∈ {0, -1}` — отмена на уровне процессинга, сохраняется отдельной записью с отрицательной суммой.
 
-`reverse_id != 0` стоит у **обеих** записей возвратной пары и ссылается на парный `trans_id`. `reverse_time` в БД проекта пустой (Vendista его не отдаёт по факту).
+`reverse_id != 0` стоит у обеих записей возвратной пары и ссылается на парный `trans_id`. `reverse_time` код читает, если поле пришло, но опираться на него нельзя: в данных Vendista оно пустое. Подсчёт стаканов — в [CUP_COUNTING.md](./CUP_COUNTING.md).
 
-Подробности подсчёта стаканов — в [CUP_COUNTING.md](./CUP_COUNTING.md).
+## Пагинация
 
-### Другие эндпоинты транзакций
+Цикл по `PageNumber` с `ItemsOnPage=100` (`VendistaService::fetchAllTransactions`, `fetchAllTerminals`) идёт, пока накоплено меньше `items_count` и страница не пуста. Окно синхронизации режется на месячные чанки, чтобы запрос не упирался в таймаут API (`VendistaService::syncTransactions`). Фильтры и сортировку (`FilterText`, `OrderBy*` и др.) код не использует.
 
-| Эндпоинт | Описание |
-|---|---|
-| `GET /transactions/csv` | Экспорт в CSV (те же параметры) |
-| `GET /transactions/{id}` | Транзакция по ID |
-| `GET /transactions/{id}/returns` | Возвраты по ID исходной транзакции |
-| `POST /transactions/{id}/cancel` | Отмена транзакции |
+## Таймауты и ретраи
 
----
+- Запросы с токеном: `timeout(60)`, `connectTimeout(15)` (`VendistaService::sendRequest`). `/token` — без явных таймаутов (дефолт Laravel, 30 с).
+- Ретрай только в `fetchAllTransactions`: 3 попытки на `ConnectionException`, пауза `2 * номер попытки` секунд. Любой другой сбой запроса — `request` возвращает `null`, и `fetchAllTransactions` прерывает выборку целиком.
 
-## Продажи
+## Чего код не обрабатывает
 
-### GET /sales/totals — итоги продаж по автоматам (основной)
+- 429 и лимиты запросов: нет backoff и `Retry-After`; лимиты API не документированы.
+- 5xx, 400, 403, 404: отдельной обработки нет, любой не-2xx кроме 401 — `Log::error` и `null`, без повтора.
+- 2FA и `/token/verify`.
+- Refresh и TTL токена: только сброс по 401.
 
-| Параметр | Тип | Описание |
-|---|---|---|
-| `MachineId` | int32 | ID автомата (если не указан — все) |
-| `DivisionId` | int32 | ID подразделения |
-| `SellTypes` | array[int32] | 1=нал, 2=безнал, 3=внешний кредит, 4=бонусы, 99=неудачные |
-| `ShowDeleted` | bool | Показывать удалённые автоматы |
-| `IsReturn` | bool | Только возвраты (default false) |
-| `Micromarket` | bool | Только микромаркеты |
-| `DateFrom` / `DateTo` | date-time | Период |
-| + пагинация |
-
-Ответ:
-```json
-{
-  "total": {
-    "sum": 100000,
-    "cash_count": 50,
-    "cash_sum": 40000,
-    "cashless_count": 100,
-    "cashless_sum": 60000
-  },
-  "items": [
-    {
-      "machine_id": 1,
-      "machine_name": "Кофейный аппарат #1",
-      "machine_address": "ул. Ленина 10",
-      "machine_model": "Necta Koro",
-      "sum": 5000,
-      "cash_count": 3, "cash_sum": 2000,
-      "cashless_count": 5, "cashless_sum": 3000
-    }
-  ],
-  "success": true
-}
-```
-
-### Другие эндпоинты продаж
-
-| Эндпоинт | Описание |
-|---|---|
-| `GET /sales/list` | Детальный список продаж (каждая продажа отдельно: товар, цена, тип оплаты, время) |
-| `GET /sales/products` | Итоги по товарам (название, количество, сумма, % от общего) |
-| `GET /sales/graph` | Данные для графиков (`day`, `sum`) |
-| `GET /sales` | **Deprecated** — использовать `/sales/totals` |
-
----
-
-## Сводный отчёт
-
-### GET /reports/common — сводный отчёт по терминалам
-
-Параметры: `TermId`, `OwnerId`, `DivisionId`, `ProcessingIds`, `DateFrom`, `DateTo` + пагинация.
-
-Ответ:
-```json
-{
-  "total": {
-    "incoming_amount": 500000,
-    "incoming_count": 100,
-    "cancelled_amount": 5000,
-    "cancelled_count": 2,
-    "rejected_amount": 3000,
-    "rejected_count": 1
-  },
-  "items": [
-    {
-      "terminal_id": 123,
-      "tid": "TID001",
-      "terminal_comment": "...",
-      "incoming_amount": 50000,
-      "incoming_count": 10,
-      "cancelled_amount": 500,
-      "cancelled_count": 1,
-      "rejected_amount": 0,
-      "rejected_count": 0
-    }
-  ]
-}
-```
-
-### Другие отчёты (17 эндпоинтов)
-
-| Эндпоинт | Описание |
-|---|---|
-| `GET /reports/transactions_duration` | Длительность транзакций (группировка: <5с, <10с, <20с, <30с, >30с) |
-| `GET /reports/gsm_quality` | Качество GSM-связи |
-| `GET /reports/operators/common` | Отчёт по операторам за период |
-| `GET /reports/operators/groupbytime` | Операторы с группировкой по времени |
-| `GET /reports/operators/now` | Операторы на текущую дату |
-| `GET /reports/operators/scores` | Оценки операторов |
-| `GET /reports/repairs/*` | 7 отчётов по ремонтам (общий, статусы, проблемы, запчасти, финансовый) |
-| `GET /reports/terminals/service` | Для техподдержки |
-| `GET /reports/tickets/types` | По типам заявок |
-| `GET /reports/tickets/comments` | Комментарии заявок |
-
----
-
-## Пагинация, фильтрация, сортировка
-
-Единый паттерн для всех списковых эндпоинтов:
-
-| Параметр | Тип | Описание |
-|---|---|---|
-| `PageNumber` | int32, min 1 | Номер страницы (с 1) |
-| `ItemsOnPage` | int32, min 1 | Записей на странице |
-| `FilterText` | string | Текст фильтра |
-| `FilterType` | int | 0 = подстрока, 1 = точное совпадение |
-| `FilterByColumn` | int32 | Номер колонки для фильтра |
-| `OrderByColumn` | int32 | Номер колонки для сортировки (-1 = без сортировки) |
-| `OrderDesc` | bool | true = по убыванию |
-
----
-
-## Форматы и соглашения
-
-- **Даты:** ISO 8601 (`2026-03-19T00:00:00`)
-- **Суммы:** в копейках (int32/int64)
-- **Формат запросов/ответов:** JSON
-- **Авторизация:** query-параметр `token`
-
-### HTTP-коды ошибок
-
-| Код | Описание |
-|---|---|
-| 200 | Успех |
-| 400 | Некорректные данные |
-| 401 | Требуется авторизация |
-| 403 | Нет прав |
-| 404 | Не найдено |
-| 429 | Rate limit (конкретные лимиты не документированы) |
-| 500 | Ошибка сервера |
-
-Формат ошибки: `{ "success": false, "error": "текст" }`
-
----
-
-## Навигация по API (все группы)
-
-52 группы, 244 эндпоинта. Ключевые для проекта Terminals:
-
-### Данные и аналитика
-| Группа | Эндпоинты | Описание |
-|---|---|---|
-| Transactions | 5 | Транзакции: список, CSV, детали, возвраты, отмена |
-| Sales | 5 | Продажи: итоги, список, товары, графики |
-| Reports | 17 | Сводные и аналитические отчёты |
-| Encashment | 1 | Инкассации |
-| Replenishments | 1 | Загрузки ингредиентов |
-| Events | 1 | События автоматов |
-
-### Справочники и управление
-| Группа | Эндпоинты | Описание |
-|---|---|---|
-| Machines | 9 | Автоматы: CRUD, ингредиенты, MDB-цены |
-| Terminals | 26 | Терминалы: CRUD, команды, настройки |
-| Products | 6 | Товары: CRUD, матрицы |
-| Ingredients | 5 | Ингредиенты: CRUD |
-| Recipes | 5 | Рецепты: CRUD |
-| Divisions | 5 | Подразделения: CRUD |
-| MachineModels | 5 | Модели автоматов |
-| MachineStates | 1 | Состояния автоматов |
-
-### Пользователи и заявки
-| Группа | Эндпоинты | Описание |
-|---|---|---|
-| Users | 10 | Пользователи: CRUD, пароль |
-| Owners | 49 | Клиенты: CRUD, документы, ФНС |
-| Tickets | 15 | Заявки: CRUD, комментарии, вложения |
-
-### Финансы и оплата
-| Группа | Эндпоинты | Описание |
-|---|---|---|
-| Subscriptions | 13 | Подписки, баланс, детализация |
-| PayMaster | 9 | Платежи, пополнение, автоплатежи |
-| BonusAccounts | 7 | Бонусные счета |
-
-### Прочее
-| Группа | Описание |
-|---|---|
-| Tid / Mid | Управление TID/MID |
-| Kassas | Кассы (облачные ОФД) |
-| NfcTags | NFC-метки |
-| QrSettings / QrProviders / DiscountsQr | QR-оплата и скидки |
-| Templates | Шаблоны настроек терминалов |
-| Repairs / RepairItems | Ремонты и запчасти |
-| Suppliers | Поставщики |
+Справочник остального API Vendista (код не вызывает): [VENDISTA_API_REFERENCE.md](./VENDISTA_API_REFERENCE.md).

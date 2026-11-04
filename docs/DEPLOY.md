@@ -1,4 +1,10 @@
+---
+name: DEPLOY
+description: Прод-среда и доставка кода Terminals: deploy.sh, доставка фронта и vendor, симлинк storage, сессии, кеш SW, типичные поломки после деплоя
+type: project
+---
 # Развёртывание и деплой
+Деплой выполняет только владелец. Агент доводит работу до коммита.
 
 ## Прод-среда
 
@@ -7,7 +13,7 @@
 - PHP 8.5: `/opt/php85/bin/php`. Системный `/usr/bin/php` старее, не подходит.
 - **Composer: отсутствует** на хостинге. `vendor/` обновляется вручную с локальной машины.
 - **Node / npm: отсутствуют**. Фронт собирается локально, артефакты `public/build/` и `public/sw.js` копируются вручную.
-- БД: MySQL. Локально — sqlite. Миграции, где это важно, поддерживают оба драйвера.
+- БД: MySQL. Локально — sqlite. Миграции обязаны работать на обоих драйверах (`db_schema.md`, «Особенности миграций»).
 - Системный `cron` запускает `schedule:run`.
 
 ## Репозиторий
@@ -20,20 +26,11 @@
 
 ## Скрипт `deploy.sh`
 
-Использует прямой путь `/opt/php85/bin/php` без модификаций PATH. Не вызывает ни `composer`, ни `npm`.
+Шаги — `cat deploy.sh`. Скрипт вызывает только `/opt/php85/bin/php`, без `composer` и `npm`.
 
-Шаги (в порядке):
-
-1. Проверка наличия `.git-token` и `/opt/php85/bin/php`.
-2. `php artisan down --retry=5` (фейл не валит деплой).
-3. `git pull --ff-only` через токен из `.git-token`.
-4. **Очистка `bootstrap/cache/{packages,services,config,routes-v7,events}.php`**. Принципиальный шаг: иначе закешированный `packages.php` может ссылаться на dev-провайдеры (Pail и пр.), отсутствующие в production-`vendor/`, и любой artisan-вызов падает с `Class Laravel\Pail\PailServiceProvider not found`.
-5. `php artisan package:discover --ansi || true` — пересобирает `bootstrap/cache/packages.php` под актуальный `vendor/`.
-6. `php artisan migrate --force`.
-7. `clear` + `cache` для config / route / view.
-8. `php artisan up`.
-
-`set -euo pipefail` — при любой ошибке скрипт останавливается. Если упадёт между `down` и `up` — сайт остаётся в maintenance до ручного `/opt/php85/bin/php artisan up`.
+Ограничения:
+- **`bootstrap/cache/*.php` чистится сразу после `git pull`, до `package:discover` и `migrate`.** `artisan down` идёт раньше и при этой ошибке деплой не валит (`|| true`). Без очистки закешированный `packages.php` ссылается на dev-провайдеры (Pail и др.), которых нет в production-`vendor/`, и любой artisan падает с `Class Laravel\Pail\PailServiceProvider not found`.
+- `set -euo pipefail`: при ошибке между `artisan down` и `artisan up` сайт остаётся в maintenance до ручного `/opt/php85/bin/php artisan up`.
 
 ### Что деплой **не** делает
 
@@ -105,7 +102,6 @@ chmod +x deploy.sh
 bash deploy.sh
 ```
 
-`.env`, `storage/app/public/visits/*`, логи, сессии, `database/*.sqlite*` — всё в `.gitignore`.
 
 ## Симлинк `public/storage`
 
@@ -153,33 +149,11 @@ const API_CACHE_NAME = 'terminals-api-' + BUILD_ID;
 
 `resources/js/bootstrap.js` обеспечивает автоматическую установку обновлений на устройствах операторов — см. `OFFLINE_PWA.md` раздел «PWA auto-update».
 
-## HTTP-кеширование (`public/.htaccess`)
+## HTTP-кеширование
+Правила — в `public/.htaccess`: `/sw.js` и `/manifest.json` отдаются с `no-cache, no-store`, `/build/*` — immutable на год.
+Если убрать `no-cache` для `/sw.js`, Apache начнёт отдавать его по ETag/Last-Modified, и новый BUILD_ID не дойдёт до клиентов.
 
-```apache
-# /sw.js и /manifest.json — никогда не кэшировать
-<FilesMatch "^(sw\.js|manifest\.json)$">
-    Header set Cache-Control "no-cache, no-store, must-revalidate"
-</FilesMatch>
-
-# /build/* — immutable на год (хеши в именах)
-SetEnvIf Request_URI "^/build/" VITE_BUILD_ASSET
-<FilesMatch "\.(js|css|woff2?|ttf|otf|svg|png|jpg|jpeg|webp|ico)$">
-    Header set Cache-Control "public, max-age=31536000, immutable" env=VITE_BUILD_ASSET
-</FilesMatch>
-```
-
-Без `no-cache` для `/sw.js` Apache мог отдавать его с ETag/Last-Modified, и обновлённый BUILD_ID мог не доезжать до клиента.
-
-## Артефакты, которые нельзя коммитить
-
-| Файл | Почему |
-|------|--------|
-| `.env` | секреты |
-| `.git-token` | GitHub PAT |
-| `public/sw.js` | генерируется из шаблона при каждой сборке |
-| `public/build/` | сборка Vite |
-| `database/*.sqlite*` | локальная dev-БД |
-| `vendor/`, `node_modules/` | deps |
+Что не коммитится — `.gitignore`.
 
 ## Типичные проблемы
 

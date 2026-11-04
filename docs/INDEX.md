@@ -1,18 +1,49 @@
-# Документация Terminals
+---
+name: INDEX
+description: Индекс документации Terminals — маршрутизатор, что читать под какую задачу
+type: project
+---
+# Документация Terminals — индекс
+Читать не подряд: сначала эта страница, затем только названные файлы. Если ответа в них нет, идти в код.
 
-Оглавление документации проекта. Каждая тема — отдельный файл.
+## Задача → минимальный набор файлов
+- Запустить локально, прогнать или написать тесты, добавить переменную окружения — `workflow.md`
+- Новое поле или настройка точки, миграция — `db_schema.md`, `conventions.md`
+- Счётчики продаж, стаканов, возвратов — `CUP_COUNTING.md`, `VENDISTA_API.md`, `TIMEZONES.md`
+- Форма обслуживания, offline-сохранение визита, обновление PWA — `OFFLINE_PWA.md`, `product.md`
+- Визит не ушёл с телефона, отладка ошибок оператора — `operations.md`, `OFFLINE_PWA.md`, `CLIENT_ERROR_LOGGING.md`
+- Новый источник клиентских ошибок — `CLIENT_ERROR_LOGGING.md`, `OFFLINE_PWA.md`
+- Сообщения и уведомления в Telegram — `TELEGRAM_PROXY.md`, `TIMEZONES.md`
+- Время визитов, транзакций, границы суток — `TIMEZONES.md`
+- Доставить правку на прод (делает владелец) — `DEPLOY.md`
+- Что-то сломалось на проде — `operations.md`
 
-## Содержание
+## Рабочий контур
+- `workflow.md` — когда нужно запустить, собрать, протестировать проект или понять, куда не ходить
+- `operations.md` — когда что-то сломалось на проде или в фоне
+- `conventions.md` — перед написанием нового кода
+- `product.md` — когда нужно понять, что делает приложение и кто им пользуется
+- `DEPLOY.md` — когда правка должна доехать до прода
 
-| Документ | Описание |
-|---|---|
-| [PROJECT.md](./PROJECT.md) | Требования к проекту: описание, стек, роли, модель данных, функциональные требования, решения по архитектуре |
-| [ROADMAP.md](./ROADMAP.md) | План реализации по этапам (0–11), текущий статус, критерии проверки каждого этапа |
-| [DEPLOY.md](./DEPLOY.md) | Развёртывание: prod-среда (PHP 8.5, без composer/npm на хостинге), `deploy.sh`, симлинк storage, симптомы и лечение типовых проблем |
-| [TIMEZONES.md](./TIMEZONES.md) | Часовые пояса в разных слоях (UTC в БД, Europe/Moscow для Vendista, Asia/Irkutsk для визитов и UI) |
-| [OFFLINE_PWA.md](./OFFLINE_PWA.md) | Offline-очередь визитов (IndexedDB), manual retry, Service Worker, **PWA auto-update** (controllerchange + интервалы + ночные паузы), устойчивость auth-store к reload |
-| [CLIENT_ERROR_LOGGING.md](./CLIENT_ERROR_LOGGING.md) | Эндпоинт `/api/client-errors` и админка `/admin/client-errors`: отладка проблем оператора без доступа к телефону |
-| [VENDISTA_API.md](./VENDISTA_API.md) | Vendista API: авторизация, транзакции, продажи, отчёты, навигация по 244 эндпоинтам |
-| [CUP_COUNTING.md](./CUP_COUNTING.md) | Подсчёт стаканов: scope'ы `poured`/`paid` в `VendistaTransaction`, структура `status`/`reverse_id`, разделение «налито» vs «оплачено» |
-| [TELEMETRON_REFERENCE.md](./TELEMETRON_REFERENCE.md) | Telemetron: полный справочник функционала, API, пересечения с проектом |
-| [TELEGRAM_PROXY.md](./TELEGRAM_PROXY.md) | SOCKS5-прокси для Telegram Bot API на серверах в РФ; отправка фото через multipart |
+## Механики
+- `OFFLINE_PWA.md` — когда правишь offline-очередь визитов, Service Worker, автообновление PWA, auth-store
+- `CLIENT_ERROR_LOGGING.md` — когда добавляешь логирование ошибок с клиента или разбираешь жалобу оператора
+- `CUP_COUNTING.md` — когда считаешь стаканы или продажи по транзакциям Vendista
+- `TIMEZONES.md` — когда работаешь с датами и временем
+
+## Интеграции и смежники
+- `VENDISTA_API.md` — когда трогаешь обмен с Vendista; справочник остального API назван внутри
+- `TELEGRAM_PROXY.md` — когда трогаешь Telegram Bot API или прокси до него
+- `counterparts.md` — когда правка затрагивает другую систему
+
+## Генерируемое
+- `db_schema.md` — когда нужны таблицы, колонки, связи; после новой миграции — обновить
+
+## Состояние проекта
+- ветка и рабочее дерево: `git status -sb`; история изменений — `git log`
+
+## Правила документации
+- `rules_documentation.md` — когда правишь документацию
+
+## Архив
+- `archive/` — устаревшее, из маршрутизации исключено, искать в нём только grep
