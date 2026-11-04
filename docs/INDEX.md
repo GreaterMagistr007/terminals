@@ -13,7 +13,8 @@ type: project
 - Форма обслуживания, offline-сохранение визита, обновление PWA — `OFFLINE_PWA.md`, `product.md`
 - Визит не ушёл с телефона, отладка ошибок оператора — `operations.md`, `OFFLINE_PWA.md`, `CLIENT_ERROR_LOGGING.md`
 - Новый источник клиентских ошибок — `CLIENT_ERROR_LOGGING.md`, `OFFLINE_PWA.md`
-- Сообщения и уведомления в Telegram — `TELEGRAM_PROXY.md`, `TIMEZONES.md`
+- Текст сообщений и уведомлений в Telegram — `product.md`, `TIMEZONES.md`
+- Отправка в Telegram не проходит, прокси — `TELEGRAM_PROXY.md`
 - Время визитов, транзакций, границы суток — `TIMEZONES.md`
 - Доставить правку на прод (делает владелец) — `DEPLOY.md`
 - Что-то сломалось на проде — `operations.md`
